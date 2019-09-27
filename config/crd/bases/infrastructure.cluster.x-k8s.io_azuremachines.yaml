@@ -1,0 +1,111 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: null
+  name: azuremachines.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    kind: AzureMachine
+    plural: azuremachines
+  scope: ""
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      description: AzureMachine is the Schema for the azuremachines API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: AzureMachineSpec defines the desired state of AzureMachine
+          properties:
+            name:
+              description: Name
+              type: string
+            providerID:
+              description: ProviderID is the unique identifier as specified by the
+                cloud provider.
+              type: string
+            resourceGroup:
+              description: ResourceGroup
+              properties:
+                name:
+                  description: Name
+                  type: string
+                region:
+                  description: Region
+                  type: string
+                subscriptionID:
+                  description: SubscriptionID
+                  type: string
+              type: object
+            sku:
+              description: SKU
+              type: string
+            sshPublicKey:
+              description: SSHPublicKey
+              type: string
+            subnet:
+              description: Subnet
+              type: string
+          type: object
+        status:
+          description: AzureMachineStatus defines the observed state of AzureMachine
+          properties:
+            addresses:
+              description: Addresses is a list of addresses assigned to the machine.
+                This field is copied from the infrastructure provider reference.
+              items:
+                description: MachineAddress contains information for the node's address.
+                properties:
+                  address:
+                    description: The machine address.
+                    type: string
+                  type:
+                    description: Machine address type, one of Hostname, ExternalIP
+                      or InternalIP.
+                    type: string
+                required:
+                - address
+                - type
+                type: object
+              type: array
+            errorMessage:
+              description: Any transient errors that occur during the reconciliation
+                of Machines can be added as events to the Machine object and/or logged
+                in the controller's output.
+              type: string
+            errorReason:
+              description: Any transient errors that occur during the reconciliation
+                of Machines can be added as events to the Machine object and/or logged
+                in the controller's output.
+              type: string
+            ready:
+              description: Ready is true when the provider resource is ready.
+              type: boolean
+          type: object
+      type: object
+  version: v1alpha2
+  versions:
+  - name: v1alpha2
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

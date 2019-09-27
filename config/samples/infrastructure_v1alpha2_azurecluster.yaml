@@ -1,0 +1,47 @@
+---
+apiVersion: cluster.x-k8s.io/v1alpha2
+kind: Cluster
+metadata:
+  name: capi-quickstart
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks: ["10.244.0.0/16"]
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+    kind: AzureCluster
+    name: capi-quickstart
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+kind: AzureCluster
+metadata:
+  name: capi-quickstart
+spec:
+  resourceGroup:
+    name: capi-quickstart
+    subscriptionID: ${AZURE_SUBSCRIPTION_ID}
+    region: southcentralus
+  network:
+    vnet:
+      name: capi-quickstart
+      cidrs:
+      - 10.0.0.0/8
+    subnets:
+    - name: controlplane
+      vnet: capi-quickstart
+      routeTable: capi-quickstart
+      securityGroup: controlplane
+      cidr: 10.240.0.0/24
+    - name: cluster
+      vnet: capi-quickstart
+      routeTable: capi-quickstart
+      securityGroup: cluster
+      cidr: 10.200.0.0/16
+    securityGroups:
+    - name: controlplane
+    - name: cluster
+    routeTable:
+      name: capi-quickstart
+    loadBalancer:
+      name: capi-quickstart
+

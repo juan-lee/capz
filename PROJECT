@@ -1,0 +1,13 @@
+version: "2"
+domain: cluster.x-k8s.io
+repo: github.com/juan-lee/capz
+resources:
+- group: infrastructure
+  version: v1alpha2
+  kind: AzureCluster
+- group: infrastructure
+  version: v1alpha2
+  kind: AzureMachine
+- group: infrastructure
+  version: v1alpha2
+  kind: AzureMachineTemplate

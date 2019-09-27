@@ -1,0 +1,158 @@
+---
+apiVersion: cluster.x-k8s.io/v1alpha2
+kind: Machine
+metadata:
+  name: capi-quickstart-controlplane-0
+  labels:
+    cluster.x-k8s.io/control-plane: "true"
+    cluster.x-k8s.io/cluster-name: "capi-quickstart"
+spec:
+  version: v1.15.4
+  bootstrap:
+    configRef:
+      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+      kind: KubeadmConfig
+      name: capi-quickstart-controlplane-0
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+    kind: AzureMachine
+    name: capi-quickstart-controlplane-0
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+kind: AzureMachine
+metadata:
+  name: capi-quickstart-controlplane-0
+spec:
+  resourceGroup:
+    name: capi-quickstart
+    subscriptionID: ${AZURE_SUBSCRIPTION_ID}
+    region: southcentralus
+  name: capi-quickstart-controlplane
+  sku: Standard_DS2_v2
+  sshPublicKey: ${SSH_PUBLIC_KEY}
+  subnet: 10.240.0.0/24
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+kind: KubeadmConfig
+metadata:
+  name: capi-quickstart-controlplane-0
+spec:
+  # For more information about these values,
+  # refer to the Kubeadm Bootstrap Provider documentation.
+  initConfiguration:
+    nodeRegistration:
+      criSocket: unix:///var/run/containerd/containerd.sock
+      kubeletExtraArgs:
+        cloud-config: /etc/kubernetes/azure.json
+        cloud-provider: azure
+  clusterConfiguration:
+    apiServer:
+      extraArgs:
+        cloud-config: /etc/kubernetes/azure.json
+        cloud-provider: azure
+      extraVolumes:
+      - hostPath: /etc/kubernetes/azure.json
+        mountPath: /etc/kubernetes/azure.json
+        name: cloud-config
+        readOnly: true
+    controllerManager:
+      extraArgs:
+        cloud-config: /etc/kubernetes/azure.json
+        cloud-provider: azure
+      extraVolumes:
+      - hostPath: /etc/kubernetes/azure.json
+        mountPath: /etc/kubernetes/azure.json
+        name: cloud-config
+        readOnly: true
+  preKubeadmCommands:
+  - bash -c /tmp/bootstrap
+  files:
+  - path: /tmp/bootstrap
+    owner: "root:root"
+    permissions: "0744"
+    content: |
+      #!/bin/bash
+
+      set -euxo pipefail
+
+      function containerd_prereq() {
+        cat > /etc/modules-load.d/containerd.conf <<EOF
+      overlay
+      br_netfilter
+      EOF
+
+        modprobe overlay
+        modprobe br_netfilter
+
+        # Setup required sysctl params, these persist across reboots.
+        cat > /etc/sysctl.d/99-kubernetes-cri.conf <<EOF
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.ipv4.ip_forward                 = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      EOF
+
+        sysctl --system
+      }
+
+      function containerd_install() {
+        # Install containerd
+        ## Set up the repository
+        ### Install packages to allow apt to use a repository over HTTPS
+        apt-get update && apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+
+        ### Add Docker’s official GPG key
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+
+        ### Add Docker apt repository.
+        add-apt-repository \
+          "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+          $(lsb_release -cs) \
+          stable"
+
+        ## Install containerd
+        apt-get update && apt-get install -y containerd.io
+
+        # Configure containerd
+        mkdir -p /etc/containerd
+        containerd config default > /etc/containerd/config.toml
+
+        # Restart containerd
+        systemctl restart containerd
+      }
+
+      function kubernetes_install() {
+        apt-get update && apt-get install -y apt-transport-https curl
+        curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+        cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
+      deb https://apt.kubernetes.io/ kubernetes-xenial main
+      EOF
+        apt-get update
+        apt-get install -y kubelet=1.15.4-00 kubeadm=1.15.4-00 kubectl=1.15.4-00
+        apt-mark hold kubelet kubeadm kubectl
+      }
+
+      containerd_prereq
+      containerd_install
+      kubernetes_install
+  - path: /etc/kubernetes/azure.json
+    owner: "root:root"
+    permissions: "0644"
+    content: |
+      {
+        "cloud": "AzurePublicCloud",
+        "tenantID": "${AZURE_TENANT_ID}",
+        "subscriptionID": "${AZURE_SUBSCRIPTION_ID}",
+        "resourceGroup": "capi-quickstart",
+        "securityGroupName": "cluster",
+        "location": "southcentralus",
+        "vmType": "vmss",
+        "vnetName": "capi-quickstart",
+        "vnetResourceGroup": "capi-quickstart",
+        "subnetName": "cluster",
+        "routeTableName": "cluster",
+        "userAssignedID": "capi-quickstart",
+        "loadBalancerSku": "Standard",
+        "maximumLoadBalancerRuleCount": 250,
+        "useManagedIdentityExtension": true,
+        "useInstanceMetadata": true
+      }

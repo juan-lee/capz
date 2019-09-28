@@ -66,6 +66,8 @@ spec:
         readOnly: true
   preKubeadmCommands:
   - bash -c /tmp/bootstrap
+  postKubeadmCommands:
+  - kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f https://docs.projectcalico.org/v3.8/manifests/calico.yaml
   files:
   - path: /tmp/bootstrap
     owner: "root:root"

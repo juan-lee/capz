@@ -11,3 +11,6 @@ resources:
 - group: infrastructure
   version: v1alpha2
   kind: AzureMachineTemplate
+- group: infrastructure
+  version: v1alpha2
+  kind: AzureMachinePool

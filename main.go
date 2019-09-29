@@ -77,6 +77,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "AzureMachine")
 		os.Exit(1)
 	}
+	if err = (&controllers.AzureMachinePoolReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("AzureMachinePool"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AzureMachinePool")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

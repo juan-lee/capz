@@ -92,7 +92,7 @@ func (m *machineContext) BackendPoolIDs(lbname string) []string {
 		return nil
 	}
 	lb, err := c.Get(context.Background(), m.Spec.ResourceGroup.Name, m.AzureCluster.Spec.Network.LoadBalancer.Name, "")
-	if err != nil && !NotFound(err) {
+	if err != nil && !notFound(err) {
 		return nil
 	}
 	var result []string
@@ -109,7 +109,7 @@ func (m *machineContext) InboundNatPoolIDs(lbname string) []string {
 		return nil
 	}
 	lb, err := c.Get(context.Background(), m.Spec.ResourceGroup.Name, m.AzureCluster.Spec.Network.LoadBalancer.Name, "")
-	if err != nil && !NotFound(err) {
+	if err != nil && !notFound(err) {
 		return nil
 	}
 	var result []string
@@ -137,17 +137,17 @@ func (r *AzureMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *AzureMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	_ = context.Background()
-	_ = r.Log.WithValues("azuremachine", req.NamespacedName)
+	log := r.Log.WithValues("azuremachine", req.NamespacedName)
 
 	ctx := context.Background()
 	machine, err := r.getMachineContext(ctx, req)
 	if err != nil {
-		r.Log.Error(err, "Error creating machine context")
+		log.Info("Error creating machine context [%+v]", err)
 		return ctrl.Result{}, nil
 	}
 
 	if machine.Status.ErrorReason != nil || machine.Status.ErrorMessage != nil {
-		r.Log.Info("Error state detected, skipping reconciliation")
+		log.Info("Error state detected, skipping reconciliation")
 		return ctrl.Result{}, nil
 	}
 
@@ -157,41 +157,42 @@ func (r *AzureMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 	// }
 
 	if !machine.Cluster.Status.InfrastructureReady {
-		r.Log.Info("Cluster infrastructure is not ready yet")
+		log.Info("Cluster infrastructure is not ready yet")
 		return ctrl.Result{}, nil
 	}
 
 	// Make sure bootstrap data is available and populated.
 	if machine.Machine.Spec.Bootstrap.Data == nil {
-		r.Log.Info("Bootstrap data is not yet available")
+		log.Info("Bootstrap data is not yet available")
 		return ctrl.Result{}, nil
 	}
-	r.Log.Info("Bootstrap", "machine.Machine.Spec.Bootstrap.Data", *machine.Machine.Spec.Bootstrap.Data)
 
 	defer func() {
 		if err := machine.Close(ctx); err != nil && reterr == nil {
 			reterr = err
-			r.Log.Error(err, "Error closing machine context")
+			log.Error(err, "Error closing machine context")
 		}
 	}()
 
 	if err := r.reconcileMachine(ctx, machine); err != nil {
-		r.Log.Error(err, "Error reconciling machine")
+		log.Error(err, "Error reconciling machine")
 		return ctrl.Result{}, nil
 	}
 	if err := r.reconcileMachineInstance(ctx, machine); err != nil {
-		r.Log.Error(err, "Error reconciling machine instance")
+		log.Error(err, "Error reconciling machine instance")
 		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{}, nil
 }
 
 func (r *AzureMachineReconciler) getMachineContext(ctx context.Context, req ctrl.Request) (*machineContext, error) {
+	log := r.Log.WithValues("azuremachine", req.NamespacedName)
 	instance := &v1alpha2.AzureMachine{}
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		return nil, err
 	}
+
 	machine, err := util.GetOwnerMachine(ctx, r.Client, instance.ObjectMeta)
 	if err != nil {
 		return nil, err
@@ -199,20 +200,23 @@ func (r *AzureMachineReconciler) getMachineContext(ctx context.Context, req ctrl
 	if machine == nil {
 		return nil, errors.New("Machine Controller has not yet set OwnerRef")
 	}
+
 	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
-		r.Log.Info("Machine is missing cluster label or cluster does not exist")
+		log.Info("Machine is missing cluster label or cluster does not exist")
 		return nil, err
 	}
+
 	azureCluster := &v1alpha2.AzureCluster{}
 	azureClusterName := client.ObjectKey{
 		Namespace: instance.Namespace,
 		Name:      cluster.Spec.InfrastructureRef.Name,
 	}
 	if err := r.Client.Get(ctx, azureClusterName, azureCluster); err != nil {
-		r.Log.Info("AzureCluster is not available yet")
+		log.Info("AzureCluster is not available yet")
 		return nil, err
 	}
+
 	helper, err := patch.NewHelper(instance, r.Client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init patch helper %w", err)
@@ -231,50 +235,49 @@ func (r *AzureMachineReconciler) reconcileMachine(ctx context.Context, machine *
 	scalesets := compute.NewVirtualMachineScaleSetsClient(machine.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&scalesets.Client)
 	if err != nil {
-		r.Log.Error(err, "auth fail")
-		return err
+		return fmt.Errorf("failed to auth [%w]", err)
 	}
+
 	scaleset, err := scalesets.Get(ctx, machine.Spec.ResourceGroup.Name, machine.Spec.Name)
-	if err != nil && !NotFound(err) {
-		return err
+	if err != nil && !notFound(err) {
+		return fmt.Errorf("failed to get vm scale set [%w]", err)
 	}
-	r.Log.Info("Found scaleset", "scaleset", scaleset)
 
 	applyMachineSpec(machine, &scaleset)
-	r.Log.Info("Patched scaleset", "scaleset", scaleset)
 
 	future, err := scalesets.CreateOrUpdate(ctx, machine.Spec.ResourceGroup.Name, machine.Spec.Name, scaleset)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update vm scale set [%w]\n%+v", err, scaleset)
 	}
 	if err := future.WaitForCompletionRef(ctx, scalesets.Client); err != nil {
-		return err
+		return fmt.Errorf("failed to wait for update vm scale set [%w]\n%+v", err, scaleset)
 	}
 	scaleset, err = future.Result(scalesets)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get result for update vm scale set [%w]\n%+v", err, scaleset)
 	}
-	r.Log.Info("Updated scaleset", "scaleset", scaleset)
 	return nil
 }
 
 func (r *AzureMachineReconciler) reconcileMachineInstance(ctx context.Context, machine *machineContext) error {
+	log := r.Log.WithValues("azuremachine", fmt.Sprintf("%s/%s", machine.Namespace, machine.Name))
+
 	vms := compute.NewVirtualMachineScaleSetVMsClient(machine.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&vms.Client)
 	if err != nil {
-		r.Log.Error(err, "auth fail")
-		return err
+		return fmt.Errorf("failed to auth [%w]", err)
 	}
+
 	for list, err := vms.List(ctx, machine.Spec.ResourceGroup.Name, machine.Spec.Name, "", "", ""); list.NotDone(); err = list.NextWithContext(ctx) {
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to list vm scale sets [%w]", err)
 		}
 		for _, v := range list.Values() {
-			machine.Spec.ProviderID = v.ID
+			machine.Spec.ProviderID = to.StringPtr(fmt.Sprintf("azure://%s", *v.ID))
 			machine.Status.Ready = true
+			log.Info("Setting ProviderID and Ready", "machine.Spec.ProviderID", *machine.Spec.ProviderID, "machine.Status.Ready", machine.Status.Ready)
 		}
 	}
-	r.Log.Info("reconcileMachineInstance", "machine.Spec.ProviderID", *machine.Spec.ProviderID, "machine.Status.Ready", machine.Status.Ready)
 	return nil
 }
 
@@ -282,7 +285,6 @@ func (r *AzureMachineReconciler) reconcileMachineInstance(ctx context.Context, m
 // requests for reconciliation of AzureMachines.
 func (r *AzureMachineReconciler) AzureClusterToAzureMachines(o handler.MapObject) []ctrl.Request {
 	result := []ctrl.Request{}
-
 	c, ok := o.Object.(*v1alpha2.AzureCluster)
 	if !ok {
 		r.Log.Error(errors.Errorf("expected a AzureCluster but got a %T", o.Object), "failed to get AzureMachine for AzureCluster")
@@ -329,8 +331,11 @@ func applyMachineSpec(machine *machineContext, in *compute.VirtualMachineScaleSe
 	vmss.SetUserAssignedIdentity(&machine.Spec.ResourceGroup)
 	vmss.SetOSDiskSize(128)
 	vmss.SetSubnet(machine.SubnetID(machine.Spec.Subnet))
-	vmss.SetBackendPools(machine.BackendPoolIDs(machine.AzureCluster.Spec.Network.LoadBalancer.Name))
-	vmss.SetInboundNATPools(machine.InboundNatPoolIDs(machine.AzureCluster.Spec.Network.LoadBalancer.Name))
+
+	if util.IsControlPlaneMachine(machine.Machine) {
+		vmss.SetBackendPools(machine.BackendPoolIDs(machine.AzureCluster.Spec.Network.LoadBalancer.Name))
+		vmss.SetInboundNATPools(machine.InboundNatPoolIDs(machine.AzureCluster.Spec.Network.LoadBalancer.Name))
+	}
 }
 
 func newVMSS(vmss *compute.VirtualMachineScaleSet) *virtualMachineScaleSet {

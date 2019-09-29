@@ -29,7 +29,7 @@ az role assignment create \
 export IMG=<provide repository info>/capz-controller:latest
 export SSH_PUBLIC_KEY=$(cat $HOME/.ssh/<provide public key>)
 export AZURE_B64ENCODED_CREDENTIALS=$(cat $HOME/.azure/creds.json | base64 -w0)
-make docker-build docker-push install deploy
+make docker-build docker-push install-upstream install deploy
 
 # Deploy Cluster
 cat config/samples/infrastructure_v1alpha2_azurecluster.yaml | envsubst | kubectl apply -f -

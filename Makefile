@@ -14,7 +14,7 @@ all: manager
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./... -coverprofile cover.out
+	go test -v ./... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
@@ -24,11 +24,13 @@ manager: generate fmt vet
 run: generate fmt vet manifests
 	go run ./main.go
 
-# Install CRDs into a cluster
-install: manifests
-	# install cluster api components
+# Install cluster api components
+install-upstream:
 	kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.2.2/cluster-api-components.yaml
 	kubectl apply -f https://github.com/kubernetes-sigs/cluster-api-bootstrap-provider-kubeadm/releases/download/v0.1.0/bootstrap-components.yaml
+
+# Install CRDs into a cluster
+install: manifests
 	kustomize build config/crd | kubectl apply -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config

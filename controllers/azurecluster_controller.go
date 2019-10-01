@@ -68,21 +68,21 @@ func (r *AzureClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	instance := &v1alpha2.AzureCluster{}
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
-		log.Error(err, "Error fetching AzureCluster")
+		log.Info("Error fetching AzureCluster", "err", err)
 		return ctrl.Result{}, nil
 	}
 	if err := r.reconcileEnvironment(ctx, instance); err != nil {
-		log.Error(err, "Error reconciling environment")
+		log.Info("Error reconciling environment", "err", err)
 		return ctrl.Result{}, nil
 	}
 	if err := r.reconcileNetwork(ctx, instance); err != nil {
-		log.Error(err, "Error reconciling network")
+		log.Info("Error reconciling network", "err", err)
 		return ctrl.Result{}, nil
 	}
 	instance.Status.Ready = true
 	err = r.Status().Update(ctx, instance)
 	if err != nil {
-		log.Info("Error updating status [%+v]", err)
+		log.Info("Error updating status [%+v]", "err", err)
 		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{}, nil

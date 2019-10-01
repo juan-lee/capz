@@ -142,7 +142,7 @@ func (r *AzureMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 	ctx := context.Background()
 	machine, err := r.getMachineContext(ctx, req)
 	if err != nil {
-		log.Info("Error creating machine context [%+v]", err)
+		log.Info("Error creating machine context [%+v]", "err", err)
 		return ctrl.Result{}, nil
 	}
 

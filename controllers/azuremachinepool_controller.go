@@ -303,18 +303,18 @@ func (r *AzureMachinePoolReconciler) reconcileMachinePoolInstances(ctx context.C
 		return fmt.Errorf("failed to auth [%w]", err)
 	}
 
+	instances := 0
 	itr, err := vms.ListComplete(ctx, machinepool.Spec.ResourceGroup.Name, machinepool.Spec.Name, "", "", "")
 	for ; itr.NotDone(); err = itr.NextWithContext(ctx) {
 		if err != nil {
 			return fmt.Errorf("failed to iterate vm scale sets [%w]", err)
 		}
 		vm := itr.Value()
+		instances++
 		log.Info("Found instance", "ID", *vm.ID)
 	}
-	if itr.Response().Value != nil {
-		machinepool.Status.Replicas = int32(len(*itr.Response().Value))
-		log.Info("Setting Replica Count", "machinepool.Status.Replicas", machinepool.Status.Replicas)
-	}
+	machinepool.Status.Replicas = int32(instances)
+	log.Info("MachinePool Replica Count", "machinepool.Status.Replicas", machinepool.Status.Replicas)
 	return nil
 }
 

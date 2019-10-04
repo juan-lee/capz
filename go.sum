@@ -99,6 +99,8 @@ github.com/json-iterator/go v1.1.6 h1:MrUvLMLTMxbqFJ9kzlvat/rYZqZnW3u4wkLzWTaFwK
 github.com/json-iterator/go v1.1.6/go.mod h1:+SdeFBvtyEkXs7REEP0seUULqWtbJapLOCVDaaPEHmU=
 github.com/juan-lee/cluster-api v0.2.2-0.20191001133958-8a87e8c6b054 h1:qWJ+m8E0UJKTDa+XoIXm/p4d2NPeK0FjM/+czMqrqBM=
 github.com/juan-lee/cluster-api v0.2.2-0.20191001133958-8a87e8c6b054/go.mod h1:Q6xaH/vzijqeYHtuItANRbiRyqJKWzCcY8kSjDvh8Qg=
+github.com/juan-lee/cluster-api v0.2.2-0.20191005153549-d7b938345451 h1:iemROwpJ8Jd0sZ553QkvyyHhOz9PE/g/w3ZJ6pp58Bw=
+github.com/juan-lee/cluster-api v0.2.2-0.20191005153549-d7b938345451/go.mod h1:Q6xaH/vzijqeYHtuItANRbiRyqJKWzCcY8kSjDvh8Qg=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
 github.com/kisielk/errcheck v1.1.0/go.mod h1:EZBBE59ingxPouuu3KfxchcWSUPOHkagtvWXihfKN4Q=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=

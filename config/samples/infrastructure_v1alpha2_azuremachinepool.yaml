@@ -32,7 +32,7 @@ spec:
     region: southcentralus
   name: capi-quickstart-workerpool
   capacity: 5
-  sku: Standard_DS2_v2
+  sku: Standard_D4s_v3
   sshPublicKey: ${SSH_PUBLIC_KEY}
   subnet: 10.200.0.0/16
 ---

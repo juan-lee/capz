@@ -29,9 +29,6 @@ type AzureMachinePoolSpec struct {
 	// Name
 	Name string `json:"name,omitempty"`
 
-	// Name
-	Capacity int32 `json:"capacity,omitempty"`
-
 	// SKU
 	SKU string `json:"sku,omitempty"`
 

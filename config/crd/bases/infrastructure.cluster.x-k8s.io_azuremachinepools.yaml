@@ -32,10 +32,6 @@ spec:
         spec:
           description: AzureMachinePoolSpec defines the desired state of AzureMachinePool
           properties:
-            capacity:
-              description: Name
-              format: int32
-              type: integer
             name:
               description: Name
               type: string

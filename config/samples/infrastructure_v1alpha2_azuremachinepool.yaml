@@ -10,16 +10,20 @@ metadata:
     # Sync these values with spec.selector.matchLabels and spec.template.metadata.labels.
     nodepool: nodepool-0
 spec:
-  version: v1.15.4
-  bootstrap:
-    configRef:
-      name: capi-quickstart-workerpool
-      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
-      kind: KubeadmConfig
-  infrastructureRef:
-    name: capi-quickstart-workerpool
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
-    kind: AzureMachinePool
+  replicas: 5
+  selector: {}
+  template:
+    spec:
+      version: v1.15.4
+      bootstrap:
+        configRef:
+          name: capi-quickstart-workerpool
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+          kind: KubeadmConfig
+      infrastructureRef:
+        name: capi-quickstart-workerpool
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+        kind: AzureMachinePool
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
 kind: AzureMachinePool
@@ -31,8 +35,7 @@ spec:
     subscriptionID: ${AZURE_SUBSCRIPTION_ID}
     region: southcentralus
   name: capi-quickstart-workerpool
-  capacity: 5
-  sku: Standard_D4s_v3
+  sku: Standard_DS4_v2
   sshPublicKey: ${SSH_PUBLIC_KEY}
   subnet: 10.200.0.0/16
 ---

@@ -110,7 +110,7 @@ func (r *AzureMachinePoolReconciler) MachinePoolToInfrastructureMapFunc(gvk sche
 		}
 
 		// Return early if the GroupVersionKind doesn't match what we expect.
-		infraGVK := m.Spec.InfrastructureRef.GroupVersionKind()
+		infraGVK := m.Spec.Template.Spec.InfrastructureRef.GroupVersionKind()
 		if gvk != infraGVK {
 			return nil
 		}
@@ -119,7 +119,7 @@ func (r *AzureMachinePoolReconciler) MachinePoolToInfrastructureMapFunc(gvk sche
 			{
 				NamespacedName: client.ObjectKey{
 					Namespace: m.Namespace,
-					Name:      m.Spec.InfrastructureRef.Name,
+					Name:      m.Spec.Template.Spec.InfrastructureRef.Name,
 				},
 			},
 		}
@@ -153,10 +153,10 @@ func (r *AzureMachinePoolReconciler) AzureClusterToAzureMachinePool(o handler.Ma
 		return nil
 	}
 	for _, m := range machinepoolList.Items {
-		if m.Spec.InfrastructureRef.Name == "" {
+		if m.Spec.Template.Spec.InfrastructureRef.Name == "" {
 			continue
 		}
-		name := client.ObjectKey{Namespace: m.Namespace, Name: m.Spec.InfrastructureRef.Name}
+		name := client.ObjectKey{Namespace: m.Namespace, Name: m.Spec.Template.Spec.InfrastructureRef.Name}
 		result = append(result, ctrl.Request{NamespacedName: name})
 	}
 
@@ -190,7 +190,7 @@ func (r *AzureMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result,
 	}
 
 	// Make sure bootstrap data is available and populated.
-	if machine.MachinePool.Spec.Bootstrap.Data == nil {
+	if machine.MachinePool.Spec.Template.Spec.Bootstrap.Data == nil {
 		log.Info("Bootstrap data is not yet available")
 		return ctrl.Result{}, nil
 	}
@@ -323,10 +323,11 @@ func applyMachinePoolSpec(mp *machinePoolContext, in *compute.VirtualMachineScal
 	vmss.SetName(mp.Spec.Name)
 	vmss.SetRegion(&mp.Spec.ResourceGroup)
 	vmss.SetSKU(mp.Spec.SKU)
-	// TODO(jpang): hardcode for now
-	vmss.SetCapacity(int64(mp.Spec.Capacity))
+	if mp.MachinePool.Spec.Replicas != nil {
+		vmss.SetCapacity(int64(*mp.MachinePool.Spec.Replicas))
+	}
 	vmss.SetPrefix(mp.Spec.Name)
-	vmss.SetCustomData(*mp.MachinePool.Spec.Bootstrap.Data)
+	vmss.SetCustomData(*mp.MachinePool.Spec.Template.Spec.Bootstrap.Data)
 	vmss.SetSSHPublicKey(mp.Spec.SSHPublicKey)
 	vmss.SetUserAssignedIdentity(&mp.Spec.ResourceGroup)
 	vmss.SetOSDiskSize(128)

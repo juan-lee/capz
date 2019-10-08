@@ -22,4 +22,4 @@ require (
 	sigs.k8s.io/controller-tools v0.2.0 // indirect
 )
 
-replace sigs.k8s.io/cluster-api => github.com/juan-lee/cluster-api v0.2.2-0.20191005153549-d7b938345451
+replace sigs.k8s.io/cluster-api => github.com/juan-lee/cluster-api v0.2.2-0.20191007183758-b8ebfaa5ddb8

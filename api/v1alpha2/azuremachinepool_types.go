@@ -38,9 +38,9 @@ type AzureMachinePoolSpec struct {
 	// Subnet
 	Subnet string `json:"subnet,omitempty"`
 
-	// ProviderID is the unique identifier as specified by the cloud provider.
+	// ProviderIDs is the unique identifier as specified by the cloud provider.
 	// +optional
-	ProviderID *string `json:"providerID,omitempty"`
+	ProviderIDs []string `json:"providerIDs,omitempty"`
 }
 
 // AzureMachinePoolStatus defines the observed state of AzureMachinePool
@@ -68,6 +68,8 @@ type AzureMachinePoolStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Replicas",type="string",JSONPath=".status.replicas",description="AzureMachinePool replicas count"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="AzureMachinePool replicas count"
 
 // AzureMachinePool is the Schema for the azuremachinepools API
 type AzureMachinePool struct {

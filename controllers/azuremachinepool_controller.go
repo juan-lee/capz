@@ -22,7 +22,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -167,6 +166,7 @@ func (r *AzureMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result,
 	_ = context.Background()
 	log := r.Log.WithValues("azuremachinepool", req.NamespacedName)
 
+	log.Info("Reconcile", "NamespacedName", req.NamespacedName)
 	ctx := context.Background()
 	machine, err := r.getMachinePoolContext(ctx, req)
 	if err != nil {
@@ -261,6 +261,7 @@ func (r *AzureMachinePoolReconciler) getMachinePoolContext(ctx context.Context, 
 
 func (r *AzureMachinePoolReconciler) reconcileMachinePool(ctx context.Context, machinepool *machinePoolContext) error {
 	log := r.Log.WithValues("azuremachinepool", fmt.Sprintf("%s/%s", machinepool.Namespace, machinepool.Name))
+	log.Info("reconcileMachinePool")
 
 	scalesets := compute.NewVirtualMachineScaleSetsClient(machinepool.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&scalesets.Client)
@@ -271,6 +272,21 @@ func (r *AzureMachinePoolReconciler) reconcileMachinePool(ctx context.Context, m
 	scaleset, err := scalesets.Get(ctx, machinepool.Spec.ResourceGroup.Name, machinepool.Spec.Name)
 	if err != nil && !notFound(err) {
 		return fmt.Errorf("failed to get vm scale set [%w]", err)
+	}
+
+	if scaleset.Sku != nil && *scaleset.Sku.Capacity != int64(*machinepool.MachinePool.Spec.Replicas) {
+		machinepool.Status.Ready = false
+		patchHelper, err := patch.NewHelper(machinepool.AzureMachinePool, r.Client)
+		if err != nil {
+			return err
+		}
+		if err := patchHelper.Patch(ctx, machinepool.AzureMachinePool); err != nil {
+			return err
+		}
+		if err := r.Client.Status().Update(ctx, machinepool.AzureMachinePool); err != nil {
+			return err
+		}
+		log.Info("Patched AzureMachinePool")
 	}
 
 	applyMachinePoolSpec(machinepool, &scaleset)
@@ -287,9 +303,8 @@ func (r *AzureMachinePoolReconciler) reconcileMachinePool(ctx context.Context, m
 		return fmt.Errorf("failed to get result for update vm scale set [%w]\n%+v", err, scaleset)
 	}
 	if scaleset.ID != nil {
-		machinepool.Spec.ProviderID = to.StringPtr(fmt.Sprintf("azure://%s", *scaleset.ID))
 		machinepool.Status.Ready = true
-		log.Info("Setting ProviderID and Ready", "machinepool.Spec.ProviderID", *machinepool.Spec.ProviderID, "machinepool.Status.Ready", machinepool.Status.Ready)
+		log.Info("Setting Status Ready", "machinepool.Status.Ready", machinepool.Status.Ready)
 	}
 	return nil
 }
@@ -303,17 +318,18 @@ func (r *AzureMachinePoolReconciler) reconcileMachinePoolInstances(ctx context.C
 		return fmt.Errorf("failed to auth [%w]", err)
 	}
 
-	instances := 0
+	var instances []string
 	itr, err := vms.ListComplete(ctx, machinepool.Spec.ResourceGroup.Name, machinepool.Spec.Name, "", "", "")
 	for ; itr.NotDone(); err = itr.NextWithContext(ctx) {
 		if err != nil {
 			return fmt.Errorf("failed to iterate vm scale sets [%w]", err)
 		}
 		vm := itr.Value()
-		instances++
+		instances = append(instances, fmt.Sprintf("azure://%s", *vm.ID))
 		log.Info("Found instance", "ID", *vm.ID)
 	}
-	machinepool.Status.Replicas = int32(instances)
+	machinepool.Spec.ProviderIDs = instances
+	machinepool.Status.Replicas = int32(len(instances))
 	log.Info("MachinePool Replica Count", "machinepool.Status.Replicas", machinepool.Status.Replicas)
 	return nil
 }

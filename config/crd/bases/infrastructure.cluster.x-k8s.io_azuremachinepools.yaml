@@ -6,6 +6,15 @@ metadata:
   creationTimestamp: null
   name: azuremachinepools.infrastructure.cluster.x-k8s.io
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.replicas
+    description: AzureMachinePool replicas count
+    name: Replicas
+    type: string
+  - JSONPath: .status.ready
+    description: AzureMachinePool replicas count
+    name: Ready
+    type: string
   group: infrastructure.cluster.x-k8s.io
   names:
     kind: AzureMachinePool
@@ -35,10 +44,12 @@ spec:
             name:
               description: Name
               type: string
-            providerID:
-              description: ProviderID is the unique identifier as specified by the
+            providerIDs:
+              description: ProviderIDs is the unique identifier as specified by the
                 cloud provider.
-              type: string
+              items:
+                type: string
+              type: array
             resourceGroup:
               description: ResourceGroup
               properties:

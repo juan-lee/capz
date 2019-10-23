@@ -179,10 +179,9 @@ func (r *AzureMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result,
 		return ctrl.Result{}, nil
 	}
 
-	// TODO(jpang): enable once delete is implemented
-	// if !util.Contains(machine.Finalizers, v1alpha2.MachineFinalizer) {
-	// 	machine.Finalizers = append(machine.Finalizers, v1alpha2.MachineFinalizer)
-	// }
+	if !util.Contains(machine.Finalizers, v1alpha2.AzureMachinePoolFinalizer) {
+		machine.Finalizers = append(machine.Finalizers, v1alpha2.AzureMachinePoolFinalizer)
+	}
 
 	if !machine.Cluster.Status.InfrastructureReady {
 		log.Info("Cluster infrastructure is not ready yet")
@@ -202,6 +201,15 @@ func (r *AzureMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result,
 		}
 	}()
 
+	// Handle deletion reconciliation loop.
+	if !machine.ObjectMeta.DeletionTimestamp.IsZero() {
+		err = r.reconcileDelete(ctx, machine)
+		if err != nil {
+			log.Error(err, "Error deleting machinepool")
+		}
+		return ctrl.Result{}, nil
+	}
+
 	if err := r.reconcileMachinePool(ctx, machine); err != nil {
 		log.Error(err, "Error reconciling machine")
 		return ctrl.Result{}, nil
@@ -211,6 +219,32 @@ func (r *AzureMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result,
 		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *AzureMachinePoolReconciler) reconcileDelete(ctx context.Context, machinepool *machinePoolContext) error {
+	log := r.Log.WithValues("azuremachinepool", fmt.Sprintf("%s/%s", machinepool.Namespace, machinepool.Name))
+	log.Info("reconcileDelete")
+
+	scalesets := compute.NewVirtualMachineScaleSetsClient(machinepool.Spec.ResourceGroup.SubscriptionID)
+	err := authorizeFromFile(&scalesets.Client)
+	if err != nil {
+		return fmt.Errorf("failed to auth [%w]", err)
+	}
+
+	future, err := scalesets.Delete(ctx, machinepool.Spec.ResourceGroup.Name, machinepool.Spec.Name)
+	if err != nil && !notFound(err) {
+		return fmt.Errorf("failed to delete vm scale set [%w]", err)
+	}
+	if err := future.WaitForCompletionRef(ctx, scalesets.Client); err != nil {
+		return fmt.Errorf("failed to wait for delete vm scale set [%w]", err)
+	}
+	_, err = future.Result(scalesets)
+	if err != nil {
+		return fmt.Errorf("failed to get result for delete vm scale set [%w]\n", err)
+	}
+
+	machinepool.ObjectMeta.Finalizers = util.Filter(machinepool.ObjectMeta.Finalizers, v1alpha2.AzureMachinePoolFinalizer)
+	return nil
 }
 
 func (r *AzureMachinePoolReconciler) getMachinePoolContext(ctx context.Context, req ctrl.Request) (*machinePoolContext, error) {

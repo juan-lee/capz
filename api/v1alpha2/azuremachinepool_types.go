@@ -21,6 +21,12 @@ import (
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
+const (
+	// MachinePoolFinalizer allows AzureMachinePoolReconciler to clean up Azure resources
+	// associated with AzureMachinePool before removing it from the apiserver.
+	AzureMachinePoolFinalizer = "azuremachinepool.infrastructure.cluster.x-k8s.io"
+)
+
 // AzureMachinePoolSpec defines the desired state of AzureMachinePool
 type AzureMachinePoolSpec struct {
 	// ResourceGroup

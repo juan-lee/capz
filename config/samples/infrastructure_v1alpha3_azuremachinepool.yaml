@@ -1,73 +1,61 @@
 ---
-apiVersion: cluster.x-k8s.io/v1alpha2
-kind: Machine
+apiVersion: cluster.x-k8s.io/v1alpha3
+kind: MachinePool
 metadata:
-  name: capi-quickstart-controlplane-0
+  name: capi-quickstart-workerpool
   labels:
-    cluster.x-k8s.io/control-plane: "true"
-    cluster.x-k8s.io/cluster-name: "capi-quickstart"
+    cluster.x-k8s.io/cluster-name: capi-quickstart
+    # Labels beyond this point are for example purposes,
+    # feel free to add more or change with something more meaningful.
+    # Sync these values with spec.selector.matchLabels and spec.template.metadata.labels.
+    nodepool: nodepool-0
 spec:
-  version: v1.15.4
-  bootstrap:
-    configRef:
-      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
-      kind: KubeadmConfig
-      name: capi-quickstart-controlplane-0
-  infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
-    kind: AzureMachine
-    name: capi-quickstart-controlplane-0
+  clusterName: "capi-quickstart"
+  replicas: 1
+  selector: {}
+  template:
+    spec:
+      clusterName: "capi-quickstart"
+      version: v1.15.4
+      bootstrap:
+        configRef:
+          name: capi-quickstart-workerpool
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+          kind: KubeadmConfig
+      infrastructureRef:
+        name: capi-quickstart-workerpool
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+        kind: AzureMachinePool
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
-kind: AzureMachine
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: AzureMachinePool
 metadata:
-  name: capi-quickstart-controlplane-0
+  name: capi-quickstart-workerpool
 spec:
   resourceGroup:
     name: capi-quickstart
     subscriptionID: ${AZURE_SUBSCRIPTION_ID}
     region: southcentralus
-  name: capi-quickstart-controlplane
-  sku: Standard_D4s_v3
+  name: capi-quickstart-workerpool
+  sku: Standard_DS4_v2
   sshPublicKey: ${SSH_PUBLIC_KEY}
-  subnet: 10.240.0.0/24
+  subnet: 10.200.0.0/16
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
 kind: KubeadmConfig
 metadata:
-  name: capi-quickstart-controlplane-0
+  name: capi-quickstart-workerpool
 spec:
   # For more information about these values,
   # refer to the Kubeadm Bootstrap Provider documentation.
-  initConfiguration:
+  joinConfiguration:
     nodeRegistration:
       criSocket: unix:///var/run/containerd/containerd.sock
       kubeletExtraArgs:
         cloud-config: /etc/kubernetes/azure.json
         cloud-provider: azure
-  clusterConfiguration:
-    apiServer:
-      extraArgs:
-        cloud-config: /etc/kubernetes/azure.json
-        cloud-provider: azure
-      extraVolumes:
-      - hostPath: /etc/kubernetes/azure.json
-        mountPath: /etc/kubernetes/azure.json
-        name: cloud-config
-        readOnly: true
-    controllerManager:
-      extraArgs:
-        cloud-config: /etc/kubernetes/azure.json
-        cloud-provider: azure
-      extraVolumes:
-      - hostPath: /etc/kubernetes/azure.json
-        mountPath: /etc/kubernetes/azure.json
-        name: cloud-config
-        readOnly: true
   preKubeadmCommands:
   - bash -c /tmp/bootstrap
-  postKubeadmCommands:
-  - kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f https://docs.projectcalico.org/v3.8/manifests/calico.yaml
   files:
   - path: /tmp/bootstrap
     owner: "root:root"

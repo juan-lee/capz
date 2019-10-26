@@ -3,14 +3,14 @@ domain: cluster.x-k8s.io
 repo: github.com/juan-lee/capz
 resources:
 - group: infrastructure
-  version: v1alpha2
+  version: v1alpha3
   kind: AzureCluster
 - group: infrastructure
-  version: v1alpha2
+  version: v1alpha3
   kind: AzureMachine
 - group: infrastructure
-  version: v1alpha2
+  version: v1alpha3
   kind: AzureMachineTemplate
 - group: infrastructure
-  version: v1alpha2
+  version: v1alpha3
   kind: AzureMachinePool

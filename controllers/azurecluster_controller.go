@@ -31,7 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/juan-lee/capz/api/v1alpha2"
+	"github.com/juan-lee/capz/api/v1alpha3"
 )
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=azureclusters,verbs=get;list;watch;create;update;patch;delete
@@ -58,14 +58,14 @@ func authorizeFromFile(c *autorest.Client) error {
 
 func (r *AzureClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha2.AzureCluster{}).
+		For(&v1alpha3.AzureCluster{}).
 		Complete(r)
 }
 
 func (r *AzureClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("azurecluster", req.NamespacedName)
 	ctx := context.Background()
-	instance := &v1alpha2.AzureCluster{}
+	instance := &v1alpha3.AzureCluster{}
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		log.Info("Error fetching AzureCluster", "err", err)
@@ -88,7 +88,7 @@ func (r *AzureClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	return ctrl.Result{}, nil
 }
 
-func (r *AzureClusterReconciler) reconcileEnvironment(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileEnvironment(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	if err := r.reconcileResourceGroup(ctx, instance); err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func (r *AzureClusterReconciler) reconcileEnvironment(ctx context.Context, insta
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcileResourceGroup(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileResourceGroup(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	groups := resources.NewGroupsClient(instance.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&groups.Client)
 	if err != nil {
@@ -121,7 +121,7 @@ func (r *AzureClusterReconciler) reconcileResourceGroup(ctx context.Context, ins
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcileIdentity(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileIdentity(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	identities := msi.NewUserAssignedIdentitiesClient(instance.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&identities.Client)
 	if err != nil {
@@ -142,7 +142,7 @@ func (r *AzureClusterReconciler) reconcileIdentity(ctx context.Context, instance
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcileNetwork(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileNetwork(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	log := r.Log.WithValues("azurecluster", fmt.Sprintf("%s/%s", instance.Namespace, instance.Name)).
 		WithValues("resourceGroup", instance.Spec.ResourceGroup.Name)
 	log.Info("Reconciling route table")
@@ -168,7 +168,7 @@ func (r *AzureClusterReconciler) reconcileNetwork(ctx context.Context, instance 
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcileRouteTable(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileRouteTable(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	c := network.NewRouteTablesClient(instance.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
 	if err != nil {
@@ -197,7 +197,7 @@ func (r *AzureClusterReconciler) reconcileRouteTable(ctx context.Context, instan
 
 }
 
-func (r *AzureClusterReconciler) reconcileSecurityGroups(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileSecurityGroups(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	c := network.NewSecurityGroupsClient(instance.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
 	if err != nil {
@@ -277,7 +277,7 @@ func addInboundTCPAllowRule(sg *network.SecurityGroup, priority int, name, port 
 	}
 }
 
-func (r *AzureClusterReconciler) reconcileVirtualNetwork(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileVirtualNetwork(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	vnets := network.NewVirtualNetworksClient(instance.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&vnets.Client)
 	if err != nil {
@@ -311,7 +311,7 @@ func (r *AzureClusterReconciler) reconcileVirtualNetwork(ctx context.Context, in
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcileSubnets(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileSubnets(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	for n := range instance.Spec.Network.Subnets {
 		rt, err := getRouteTable(ctx, instance.Spec.ResourceGroup.SubscriptionID, instance.Spec.ResourceGroup.Name, instance.Spec.Network.Subnets[n].RouteTable)
 		if err != nil {
@@ -364,7 +364,7 @@ func (r *AzureClusterReconciler) reconcileSubnets(ctx context.Context, instance 
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcileAPIEndpoint(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileAPIEndpoint(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	log := r.Log.WithValues("azurecluster", fmt.Sprintf("%s/%s", instance.Namespace, instance.Name)).
 		WithValues("apiEndpoint", instance.Spec.ResourceGroup.Name)
 	log.Info("Reconciling public ip")
@@ -382,7 +382,7 @@ func (r *AzureClusterReconciler) reconcileAPIEndpoint(ctx context.Context, insta
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcilePublicIP(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcilePublicIP(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	log := r.Log.WithValues("azurecluster", fmt.Sprintf("%s/%s", instance.Namespace, instance.Name)).
 		WithValues("publicIP", instance.Spec.Network.LoadBalancer.Name)
 	c := network.NewPublicIPAddressesClient(instance.Spec.ResourceGroup.SubscriptionID)
@@ -428,7 +428,7 @@ func (r *AzureClusterReconciler) reconcilePublicIP(ctx context.Context, instance
 		}
 		if !found {
 			log.Info("Setting Status.APIEndpoints", "fqdn", *ip.DNSSettings.Fqdn)
-			instance.Status.APIEndpoints = append(instance.Status.APIEndpoints, v1alpha2.APIEndpoint{
+			instance.Status.APIEndpoints = append(instance.Status.APIEndpoints, v1alpha3.APIEndpoint{
 				Host: *ip.DNSSettings.Fqdn,
 				Port: 6443,
 			})
@@ -437,7 +437,7 @@ func (r *AzureClusterReconciler) reconcilePublicIP(ctx context.Context, instance
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcileLoadBalancer(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileLoadBalancer(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	c := network.NewLoadBalancersClient(instance.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
 	if err != nil {
@@ -532,7 +532,7 @@ func (r *AzureClusterReconciler) reconcileLoadBalancer(ctx context.Context, inst
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcileLoadBalancerRules(ctx context.Context, instance *v1alpha2.AzureCluster) error {
+func (r *AzureClusterReconciler) reconcileLoadBalancerRules(ctx context.Context, instance *v1alpha3.AzureCluster) error {
 	c := network.NewLoadBalancersClient(instance.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
 	if err != nil {
@@ -686,7 +686,7 @@ func makePublicFrontendIPConfig(publicIPAddressID string) *network.FrontendIPCon
 	}
 }
 
-func applySubnetChanges(spec v1alpha2.Subnet, subnet *network.Subnet) (bool, error) {
+func applySubnetChanges(spec v1alpha3.Subnet, subnet *network.Subnet) (bool, error) {
 	changed := false
 	if subnet.AddressPrefix == nil || spec.CIDR != *subnet.AddressPrefix {
 		changed = true
@@ -734,7 +734,7 @@ func getRouteTable(ctx context.Context, subID, rg, name string) (*network.RouteT
 	return &rt, nil
 }
 
-func applyVNETChanges(spec v1alpha2.VirtualNetwork, vnet *network.VirtualNetwork) (bool, error) {
+func applyVNETChanges(spec v1alpha3.VirtualNetwork, vnet *network.VirtualNetwork) (bool, error) {
 	changed := false
 	if vnet.VirtualNetworkPropertiesFormat == nil {
 		vnet.VirtualNetworkPropertiesFormat = &network.VirtualNetworkPropertiesFormat{

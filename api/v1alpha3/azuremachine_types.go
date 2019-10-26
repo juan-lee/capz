@@ -14,11 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha2
+package v1alpha3
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	capiv1alpha2 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
@@ -67,7 +67,7 @@ type AzureMachineStatus struct {
 	// Addresses is a list of addresses assigned to the machine.
 	// This field is copied from the infrastructure provider reference.
 	// +optional
-	Addresses capiv1alpha2.MachineAddresses `json:"addresses,omitempty"`
+	Addresses capiv1.MachineAddresses `json:"addresses,omitempty"`
 
 	// Ready is true when the provider resource is ready.
 	// +optional

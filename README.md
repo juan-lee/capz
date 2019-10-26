@@ -1,6 +1,6 @@
 # capz
 Quick and dirty provider for testing out new features for cluster-api-provider-azure. This repo goes
-away once cluster-api-provider-azure is updated to v1alpha2 and azure features such as standard load
+away once cluster-api-provider-azure is updated to v1alpha3 and azure features such as standard load
 balancer, managed identity, and vmss are integrated.
 
 ## Quickstart
@@ -32,10 +32,10 @@ export AZURE_B64ENCODED_CREDENTIALS=$(cat $HOME/.azure/creds.json | base64 -w0)
 make docker-build docker-push install-upstream install deploy
 
 # Deploy Cluster
-cat config/samples/infrastructure_v1alpha2_azurecluster.yaml | envsubst | kubectl apply -f -
+cat config/samples/infrastructure_v1alpha3_azurecluster.yaml | envsubst | kubectl apply -f -
 
 # Deploy Control Plane Machine
-cat config/samples/infrastructure_v1alpha2_azuremachine.yaml | envsubst | kubectl apply -f -
+cat config/samples/infrastructure_v1alpha3_azuremachine.yaml | envsubst | kubectl apply -f -
 
 # Wait for Provisioning to complete
 kubectl get cluster,machine -w

@@ -26,7 +26,7 @@ import (
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	capiv1alpha2 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -35,8 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/juan-lee/capz/api/v1alpha2"
-	infrastructurev1alpha2 "github.com/juan-lee/capz/api/v1alpha2"
+	"github.com/juan-lee/capz/api/v1alpha3"
 )
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=azuremachinepools,verbs=get;list;watch;create;update;patch;delete
@@ -52,10 +51,10 @@ type AzureMachinePoolReconciler struct {
 
 type machinePoolContext struct {
 	Client client.Client
-	*v1alpha2.AzureMachinePool
-	AzureCluster *v1alpha2.AzureCluster
-	MachinePool  *capiv1alpha2.MachinePool
-	Cluster      *capiv1alpha2.Cluster
+	*v1alpha3.AzureMachinePool
+	AzureCluster *v1alpha3.AzureCluster
+	MachinePool  *capiv1.MachinePool
+	Cluster      *capiv1.Cluster
 	patchHelper  *patch.Helper
 }
 
@@ -85,15 +84,15 @@ func (m *machinePoolContext) SubnetID(cidr string) string {
 
 func (r *AzureMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1alpha2.AzureMachinePool{}).
+		For(&v1alpha3.AzureMachinePool{}).
 		Watches(
-			&source.Kind{Type: &capiv1alpha2.MachinePool{}},
+			&source.Kind{Type: &capiv1.MachinePool{}},
 			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: r.MachinePoolToInfrastructureMapFunc(v1alpha2.GroupVersion.WithKind("AzureMachinePool")),
+				ToRequests: r.MachinePoolToInfrastructureMapFunc(v1alpha3.GroupVersion.WithKind("AzureMachinePool")),
 			},
 		).
 		Watches(
-			&source.Kind{Type: &v1alpha2.AzureCluster{}},
+			&source.Kind{Type: &v1alpha3.AzureCluster{}},
 			&handler.EnqueueRequestsFromMapFunc{ToRequests: handler.ToRequestsFunc(r.AzureClusterToAzureMachinePool)},
 		).
 		Complete(r)
@@ -103,7 +102,7 @@ func (r *AzureMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // Machine events and returns reconciliation requests for an infrastructure provider object.
 func (r *AzureMachinePoolReconciler) MachinePoolToInfrastructureMapFunc(gvk schema.GroupVersionKind) handler.ToRequestsFunc {
 	return func(o handler.MapObject) []reconcile.Request {
-		m, ok := o.Object.(*capiv1alpha2.MachinePool)
+		m, ok := o.Object.(*capiv1.MachinePool)
 		if !ok {
 			return nil
 		}
@@ -129,7 +128,7 @@ func (r *AzureMachinePoolReconciler) MachinePoolToInfrastructureMapFunc(gvk sche
 // requests for reconciliation of AzureMachinePools.
 func (r *AzureMachinePoolReconciler) AzureClusterToAzureMachinePool(o handler.MapObject) []ctrl.Request {
 	result := []ctrl.Request{}
-	c, ok := o.Object.(*v1alpha2.AzureCluster)
+	c, ok := o.Object.(*v1alpha3.AzureCluster)
 	if !ok {
 		r.Log.Error(errors.Errorf("expected a AzureCluster but got a %T", o.Object), "failed to get AzureMachine for AzureCluster")
 		return nil
@@ -145,8 +144,8 @@ func (r *AzureMachinePoolReconciler) AzureClusterToAzureMachinePool(o handler.Ma
 		return result
 	}
 
-	labels := map[string]string{capiv1alpha2.MachineClusterLabelName: cluster.Name}
-	machinepoolList := &capiv1alpha2.MachinePoolList{}
+	labels := map[string]string{capiv1.ClusterLabelName: cluster.Name}
+	machinepoolList := &capiv1.MachinePoolList{}
 	if err := r.List(context.TODO(), machinepoolList, client.InNamespace(c.Namespace), client.MatchingLabels(labels)); err != nil {
 		log.Error(err, "failed to list Machines")
 		return nil
@@ -179,8 +178,8 @@ func (r *AzureMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result,
 		return ctrl.Result{}, nil
 	}
 
-	if !util.Contains(machine.Finalizers, v1alpha2.AzureMachinePoolFinalizer) {
-		machine.Finalizers = append(machine.Finalizers, v1alpha2.AzureMachinePoolFinalizer)
+	if !util.Contains(machine.Finalizers, v1alpha3.AzureMachinePoolFinalizer) {
+		machine.Finalizers = append(machine.Finalizers, v1alpha3.AzureMachinePoolFinalizer)
 	}
 
 	if !machine.Cluster.Status.InfrastructureReady {
@@ -243,13 +242,13 @@ func (r *AzureMachinePoolReconciler) reconcileDelete(ctx context.Context, machin
 		return fmt.Errorf("failed to get result for delete vm scale set [%w]\n", err)
 	}
 
-	machinepool.ObjectMeta.Finalizers = util.Filter(machinepool.ObjectMeta.Finalizers, v1alpha2.AzureMachinePoolFinalizer)
+	machinepool.ObjectMeta.Finalizers = util.Filter(machinepool.ObjectMeta.Finalizers, v1alpha3.AzureMachinePoolFinalizer)
 	return nil
 }
 
 func (r *AzureMachinePoolReconciler) getMachinePoolContext(ctx context.Context, req ctrl.Request) (*machinePoolContext, error) {
 	log := r.Log.WithValues("azuremachinepool", req.NamespacedName)
-	instance := &v1alpha2.AzureMachinePool{}
+	instance := &v1alpha3.AzureMachinePool{}
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		return nil, err
@@ -260,16 +259,16 @@ func (r *AzureMachinePoolReconciler) getMachinePoolContext(ctx context.Context, 
 		return nil, err
 	}
 	if machine == nil {
-		return nil, errors.New("Machine Controller has not yet set OwnerRef")
+		return nil, errors.New("MachinePool Controller has not yet set OwnerRef")
 	}
 
 	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
-		log.Info("Machine is missing cluster label or cluster does not exist")
+		log.Info("MachinePool is missing cluster label or cluster does not exist")
 		return nil, err
 	}
 
-	azureCluster := &v1alpha2.AzureCluster{}
+	azureCluster := &v1alpha3.AzureCluster{}
 	azureClusterName := client.ObjectKey{
 		Namespace: instance.Namespace,
 		Name:      cluster.Spec.InfrastructureRef.Name,

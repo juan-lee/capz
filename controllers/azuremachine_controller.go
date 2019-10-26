@@ -26,7 +26,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	capiv1alpha2 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/juan-lee/capz/api/v1alpha2"
+	"github.com/juan-lee/capz/api/v1alpha3"
 )
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=azuremachines,verbs=get;list;watch;create;update;patch;delete
@@ -50,10 +50,10 @@ type AzureMachineReconciler struct {
 
 type machineContext struct {
 	Client client.Client
-	*v1alpha2.AzureMachine
-	AzureCluster *v1alpha2.AzureCluster
-	Machine      *capiv1alpha2.Machine
-	Cluster      *capiv1alpha2.Cluster
+	*v1alpha3.AzureMachine
+	AzureCluster *v1alpha3.AzureCluster
+	Machine      *capiv1.Machine
+	Cluster      *capiv1.Cluster
 	patchHelper  *patch.Helper
 }
 
@@ -121,15 +121,15 @@ func (m *machineContext) InboundNatPoolIDs(lbname string) []string {
 
 func (r *AzureMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha2.AzureMachine{}).
+		For(&v1alpha3.AzureMachine{}).
 		Watches(
-			&source.Kind{Type: &capiv1alpha2.Machine{}},
+			&source.Kind{Type: &capiv1.Machine{}},
 			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: util.MachineToInfrastructureMapFunc(v1alpha2.GroupVersion.WithKind("AzureMachine")),
+				ToRequests: util.MachineToInfrastructureMapFunc(v1alpha3.GroupVersion.WithKind("AzureMachine")),
 			},
 		).
 		Watches(
-			&source.Kind{Type: &v1alpha2.AzureCluster{}},
+			&source.Kind{Type: &v1alpha3.AzureCluster{}},
 			&handler.EnqueueRequestsFromMapFunc{ToRequests: handler.ToRequestsFunc(r.AzureClusterToAzureMachines)},
 		).
 		Complete(r)
@@ -152,8 +152,8 @@ func (r *AzureMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 	}
 
 	// TODO(jpang): enable once delete is implemented
-	// if !util.Contains(machine.Finalizers, v1alpha2.MachineFinalizer) {
-	// 	machine.Finalizers = append(machine.Finalizers, v1alpha2.MachineFinalizer)
+	// if !util.Contains(machine.Finalizers, v1alpha3.MachineFinalizer) {
+	// 	machine.Finalizers = append(machine.Finalizers, v1alpha3.MachineFinalizer)
 	// }
 
 	if !machine.Cluster.Status.InfrastructureReady {
@@ -187,7 +187,7 @@ func (r *AzureMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 
 func (r *AzureMachineReconciler) getMachineContext(ctx context.Context, req ctrl.Request) (*machineContext, error) {
 	log := r.Log.WithValues("azuremachine", req.NamespacedName)
-	instance := &v1alpha2.AzureMachine{}
+	instance := &v1alpha3.AzureMachine{}
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		return nil, err
@@ -207,7 +207,7 @@ func (r *AzureMachineReconciler) getMachineContext(ctx context.Context, req ctrl
 		return nil, err
 	}
 
-	azureCluster := &v1alpha2.AzureCluster{}
+	azureCluster := &v1alpha3.AzureCluster{}
 	azureClusterName := client.ObjectKey{
 		Namespace: instance.Namespace,
 		Name:      cluster.Spec.InfrastructureRef.Name,
@@ -285,7 +285,7 @@ func (r *AzureMachineReconciler) reconcileMachineInstance(ctx context.Context, m
 // requests for reconciliation of AzureMachines.
 func (r *AzureMachineReconciler) AzureClusterToAzureMachines(o handler.MapObject) []ctrl.Request {
 	result := []ctrl.Request{}
-	c, ok := o.Object.(*v1alpha2.AzureCluster)
+	c, ok := o.Object.(*v1alpha3.AzureCluster)
 	if !ok {
 		r.Log.Error(errors.Errorf("expected a AzureCluster but got a %T", o.Object), "failed to get AzureMachine for AzureCluster")
 		return nil
@@ -301,8 +301,8 @@ func (r *AzureMachineReconciler) AzureClusterToAzureMachines(o handler.MapObject
 		return result
 	}
 
-	labels := map[string]string{capiv1alpha2.MachineClusterLabelName: cluster.Name}
-	machineList := &capiv1alpha2.MachineList{}
+	labels := map[string]string{capiv1.ClusterLabelName: cluster.Name}
+	machineList := &capiv1.MachineList{}
 	if err := r.List(context.TODO(), machineList, client.InNamespace(c.Namespace), client.MatchingLabels(labels)); err != nil {
 		log.Error(err, "failed to list Machines")
 		return nil
@@ -408,7 +408,7 @@ func (vmss *virtualMachineScaleSet) SetName(name string) {
 	vmss.VirtualMachineScaleSet.Name = &name
 }
 
-func (vmss *virtualMachineScaleSet) SetRegion(rg *v1alpha2.ResourceGroup) {
+func (vmss *virtualMachineScaleSet) SetRegion(rg *v1alpha3.ResourceGroup) {
 	vmss.VirtualMachineScaleSet.Location = &rg.Region
 }
 
@@ -448,7 +448,7 @@ func (vmss *virtualMachineScaleSet) SetSSHPublicKey(pk string) {
 	}
 }
 
-func (vmss *virtualMachineScaleSet) SetUserAssignedIdentity(rg *v1alpha2.ResourceGroup) {
+func (vmss *virtualMachineScaleSet) SetUserAssignedIdentity(rg *v1alpha3.ResourceGroup) {
 	id := fmt.Sprintf(
 		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ManagedIdentity/userAssignedIdentities/%s",
 		rg.SubscriptionID,

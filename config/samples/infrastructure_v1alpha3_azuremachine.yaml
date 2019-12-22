@@ -11,7 +11,7 @@ spec:
   version: v1.15.4
   bootstrap:
     configRef:
-      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
       kind: KubeadmConfig
       name: capi-quickstart-controlplane-0
   infrastructureRef:
@@ -33,7 +33,7 @@ spec:
   sshPublicKey: ${SSH_PUBLIC_KEY}
   subnet: 10.240.0.0/24
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 kind: KubeadmConfig
 metadata:
   name: capi-quickstart-controlplane-0

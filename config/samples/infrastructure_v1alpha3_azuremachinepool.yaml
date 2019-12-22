@@ -12,7 +12,6 @@ metadata:
 spec:
   clusterName: "capi-quickstart"
   replicas: 1
-  selector: {}
   template:
     spec:
       clusterName: "capi-quickstart"
@@ -20,7 +19,7 @@ spec:
       bootstrap:
         configRef:
           name: capi-quickstart-workerpool
-          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
           kind: KubeadmConfig
       infrastructureRef:
         name: capi-quickstart-workerpool
@@ -41,7 +40,7 @@ spec:
   sshPublicKey: ${SSH_PUBLIC_KEY}
   subnet: 10.200.0.0/16
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha2
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 kind: KubeadmConfig
 metadata:
   name: capi-quickstart-workerpool

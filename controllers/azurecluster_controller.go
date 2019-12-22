@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/juan-lee/capz/api/v1alpha3"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=azureclusters,verbs=get;list;watch;create;update;patch;delete
@@ -83,6 +84,11 @@ func (r *AzureClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	err = r.Status().Update(ctx, instance)
 	if err != nil {
 		log.Info("Error updating status [%+v]", "err", err)
+		return ctrl.Result{}, nil
+	}
+	err = r.Update(ctx, instance)
+	if err != nil {
+		log.Info("Error updating [%+v]", "err", err)
 		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{}, nil
@@ -418,20 +424,10 @@ func (r *AzureClusterReconciler) reconcilePublicIP(ctx context.Context, instance
 		return fmt.Errorf("failed to get result for update public ip [%w]", err)
 	}
 	if ip.DNSSettings.Fqdn != nil && *ip.DNSSettings.Fqdn != "" {
-		found := false
-		for n := range instance.Status.APIEndpoints {
-			if instance.Status.APIEndpoints[n].Host == *ip.DNSSettings.Fqdn {
-				log.Info("Status.APIEndpoints already set", "APIEndpoint", instance.Status.APIEndpoints[n])
-				found = true
-				break
-			}
-		}
-		if !found {
-			log.Info("Setting Status.APIEndpoints", "fqdn", *ip.DNSSettings.Fqdn)
-			instance.Status.APIEndpoints = append(instance.Status.APIEndpoints, v1alpha3.APIEndpoint{
-				Host: *ip.DNSSettings.Fqdn,
-				Port: 6443,
-			})
+		log.Info("Setting Spec.ControlPlaneEndpoint", "fqdn", *ip.DNSSettings.Fqdn)
+		instance.Spec.ControlPlaneEndpoint = capiv1.APIEndpoint{
+			Host: *ip.DNSSettings.Fqdn,
+			Port: 6443,
 		}
 	}
 	return nil

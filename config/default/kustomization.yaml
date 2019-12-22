@@ -6,14 +6,17 @@ namespace: capz-system
 # "wordpress" becomes "alices-wordpress".
 # Note that it should also match with the prefix (text before '-') of the namespace
 # field above.
-namePrefix: capz-
+# namePrefix: capz-
 
 # Labels to add to all resources and selectors.
 #commonLabels:
 #  someName: someValue
 
+resources:
+- namespace.yaml
+
 bases:
-- ../crd
+# - ../crd
 - ../rbac
 - ../manager
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in crd/kustomization.yaml
@@ -22,6 +25,7 @@ bases:
 #- ../certmanager
 
 patchesStrategicMerge:
+- manager_image_patch.yaml
   # Protect the /metrics endpoint by putting it behind auth.
   # Only one of manager_auth_proxy_patch.yaml and
   # manager_prometheus_metrics_patch.yaml should be enabled.

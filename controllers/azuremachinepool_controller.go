@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util"
@@ -246,6 +247,26 @@ func (r *AzureMachinePoolReconciler) reconcileDelete(ctx context.Context, machin
 	return nil
 }
 
+// GetOwnerMachinePool returns the Machine object owning the current resource.
+func GetOwnerMachinePool(ctx context.Context, c client.Client, obj metav1.ObjectMeta) (*capiv1.MachinePool, error) {
+	for _, ref := range obj.OwnerReferences {
+		if ref.Kind == "MachinePool" && ref.APIVersion == capiv1.GroupVersion.String() {
+			return GetMachinePoolByName(ctx, c, obj.Namespace, ref.Name)
+		}
+	}
+	return nil, nil
+}
+
+// GetMachineByName finds and return a Machine object using the specified params.
+func GetMachinePoolByName(ctx context.Context, c client.Client, namespace, name string) (*capiv1.MachinePool, error) {
+	m := &capiv1.MachinePool{}
+	key := client.ObjectKey{Name: name, Namespace: namespace}
+	if err := c.Get(ctx, key, m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (r *AzureMachinePoolReconciler) getMachinePoolContext(ctx context.Context, req ctrl.Request) (*machinePoolContext, error) {
 	log := r.Log.WithValues("azuremachinepool", req.NamespacedName)
 	instance := &v1alpha3.AzureMachinePool{}
@@ -254,15 +275,15 @@ func (r *AzureMachinePoolReconciler) getMachinePoolContext(ctx context.Context, 
 		return nil, err
 	}
 
-	machine, err := util.GetOwnerMachinePool(ctx, r.Client, instance.ObjectMeta)
+	mp, err := GetOwnerMachinePool(ctx, r.Client, instance.ObjectMeta)
 	if err != nil {
 		return nil, err
 	}
-	if machine == nil {
+	if mp == nil {
 		return nil, errors.New("MachinePool Controller has not yet set OwnerRef")
 	}
 
-	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
+	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, mp.ObjectMeta)
 	if err != nil {
 		log.Info("MachinePool is missing cluster label or cluster does not exist")
 		return nil, err
@@ -286,7 +307,7 @@ func (r *AzureMachinePoolReconciler) getMachinePoolContext(ctx context.Context, 
 		Client:           r.Client,
 		AzureMachinePool: instance,
 		AzureCluster:     azureCluster,
-		MachinePool:      machine,
+		MachinePool:      mp,
 		Cluster:          cluster,
 		patchHelper:      helper,
 	}, nil

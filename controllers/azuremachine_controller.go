@@ -25,7 +25,9 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -119,6 +121,15 @@ func (m *machineContext) InboundNatPoolIDs(lbname string) []string {
 	return result
 }
 
+func (m *machineContext) CustomData() string {
+	secret := &corev1.Secret{}
+	err := m.Client.Get(context.Background(), types.NamespacedName{Name: *m.Machine.Spec.Bootstrap.DataSecretName, Namespace: m.Namespace}, secret)
+	if err != nil {
+		panic("Couldn't get secret")
+	}
+	return string(secret.Data["value"])
+}
+
 func (r *AzureMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha3.AzureMachine{}).
@@ -162,7 +173,7 @@ func (r *AzureMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, ret
 	}
 
 	// Make sure bootstrap data is available and populated.
-	if machine.Machine.Spec.Bootstrap.Data == nil {
+	if machine.Machine.Spec.Bootstrap.DataSecretName == nil {
 		log.Info("Bootstrap data is not yet available")
 		return ctrl.Result{}, nil
 	}
@@ -326,7 +337,7 @@ func applyMachineSpec(machine *machineContext, in *compute.VirtualMachineScaleSe
 	// TODO(jpang): hardcode for now
 	vmss.SetCapacity(1)
 	vmss.SetPrefix(machine.Spec.Name)
-	vmss.SetCustomData(*machine.Machine.Spec.Bootstrap.Data)
+	// vmss.SetCustomData(*machine.Machine.Spec.Bootstrap.Data)
 	vmss.SetSSHPublicKey(machine.Spec.SSHPublicKey)
 	vmss.SetUserAssignedIdentity(&machine.Spec.ResourceGroup)
 	vmss.SetOSDiskSize(128)

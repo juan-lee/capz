@@ -18,6 +18,7 @@ package v1alpha3
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
@@ -29,6 +30,10 @@ const (
 
 // AzureClusterSpec defines the desired state of AzureCluster
 type AzureClusterSpec struct {
+	// ControlPlaneEndpoint
+	// +optional
+	ControlPlaneEndpoint capiv1.APIEndpoint `json:"controlPlaneEndpoint,omitempty"`
+
 	// ResourceGroup
 	ResourceGroup ResourceGroup `json:"resourceGroup,omitempty"`
 
@@ -38,10 +43,6 @@ type AzureClusterSpec struct {
 
 // AzureClusterStatus defines the observed state of AzureCluster
 type AzureClusterStatus struct {
-	// APIEndpoints represents the endpoints to communicate with the control plane.
-	// +optional
-	APIEndpoints []APIEndpoint `json:"apiEndpoints,omitempty"`
-
 	// ErrorReason indicates that there is a problem reconciling the
 	// state, and will be set to a token value suitable for
 	// programmatic interpretation.
@@ -55,6 +56,10 @@ type AzureClusterStatus struct {
 
 	// Ready indicates that the cluster infrastructure was successfully provisioned.
 	Ready bool `json:"ready"`
+
+	// FailureDomains
+	// +optional
+	FailureDomains capiv1.FailureDomains `json:"failureDomains,omitempty"`
 }
 
 // +kubebuilder:object:root=true

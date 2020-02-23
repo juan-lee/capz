@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
@@ -43,6 +44,7 @@ import (
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=azuremachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
 
 // AzureMachineReconciler reconciles a AzureMachine object
 type AzureMachineReconciler struct {
@@ -125,9 +127,13 @@ func (m *machineContext) CustomData() string {
 	secret := &corev1.Secret{}
 	err := m.Client.Get(context.Background(), types.NamespacedName{Name: *m.Machine.Spec.Bootstrap.DataSecretName, Namespace: m.Namespace}, secret)
 	if err != nil {
-		panic("Couldn't get secret")
+		panic(err)
 	}
-	return string(secret.Data["value"])
+	customData := base64.StdEncoding.EncodeToString(secret.Data["value"])
+	if err != nil {
+		panic(err)
+	}
+	return customData
 }
 
 func (r *AzureMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -337,7 +343,7 @@ func applyMachineSpec(machine *machineContext, in *compute.VirtualMachineScaleSe
 	// TODO(jpang): hardcode for now
 	vmss.SetCapacity(1)
 	vmss.SetPrefix(machine.Spec.Name)
-	// vmss.SetCustomData(*machine.Machine.Spec.Bootstrap.Data)
+	vmss.SetCustomData(machine.CustomData())
 	vmss.SetSSHPublicKey(machine.Spec.SSHPublicKey)
 	vmss.SetUserAssignedIdentity(&machine.Spec.ResourceGroup)
 	vmss.SetOSDiskSize(128)

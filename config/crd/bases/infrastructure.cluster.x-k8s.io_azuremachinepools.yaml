@@ -48,9 +48,9 @@ spec:
               name:
                 description: Name
                 type: string
-              providerIDs:
-                description: ProviderIDs is the unique identifier as specified by
-                  the cloud provider.
+              providerIDList:
+                description: ProviderIDList is the unique identifier as specified
+                  by the cloud provider.
                 items:
                   type: string
                 type: array

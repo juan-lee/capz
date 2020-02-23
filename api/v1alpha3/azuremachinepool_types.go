@@ -44,9 +44,9 @@ type AzureMachinePoolSpec struct {
 	// Subnet
 	Subnet string `json:"subnet,omitempty"`
 
-	// ProviderIDs is the unique identifier as specified by the cloud provider.
+	// ProviderIDList is the unique identifier as specified by the cloud provider.
 	// +optional
-	ProviderIDs []string `json:"providerIDs,omitempty"`
+	ProviderIDList []string `json:"providerIDList,omitempty"`
 }
 
 // AzureMachinePoolStatus defines the observed state of AzureMachinePool

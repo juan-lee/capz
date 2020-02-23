@@ -18,15 +18,18 @@ package controllers
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -43,6 +46,7 @@ import (
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=azuremachinepools/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinepools;machinepools/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
 
 // AzureMachinePoolReconciler reconciles a AzureMachinePool object
 type AzureMachinePoolReconciler struct {
@@ -81,6 +85,19 @@ func (m *machinePoolContext) SubnetID(cidr string) string {
 		}
 	}
 	return ""
+}
+
+func (m *machinePoolContext) CustomData() string {
+	secret := &corev1.Secret{}
+	err := m.Client.Get(context.Background(), types.NamespacedName{Name: *m.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName, Namespace: m.Namespace}, secret)
+	if err != nil {
+		panic(err)
+	}
+	customData := base64.StdEncoding.EncodeToString(secret.Data["value"])
+	if err != nil {
+		panic(err)
+	}
+	return customData
 }
 
 func (r *AzureMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -189,7 +206,7 @@ func (r *AzureMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result,
 	}
 
 	// Make sure bootstrap data is available and populated.
-	if machine.MachinePool.Spec.Template.Spec.Bootstrap.Data == nil {
+	if machine.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
 		log.Info("Bootstrap data is not yet available")
 		return ctrl.Result{}, nil
 	}
@@ -382,7 +399,7 @@ func (r *AzureMachinePoolReconciler) reconcileMachinePoolInstances(ctx context.C
 		instances = append(instances, fmt.Sprintf("azure://%s", *vm.ID))
 		log.Info("Found instance", "ID", *vm.ID)
 	}
-	machinepool.Spec.ProviderIDs = instances
+	machinepool.Spec.ProviderIDList = instances
 	machinepool.Status.Replicas = int32(len(instances))
 	log.Info("MachinePool Replica Count", "machinepool.Status.Replicas", machinepool.Status.Replicas)
 	return nil
@@ -397,7 +414,7 @@ func applyMachinePoolSpec(mp *machinePoolContext, in *compute.VirtualMachineScal
 		vmss.SetCapacity(int64(*mp.MachinePool.Spec.Replicas))
 	}
 	vmss.SetPrefix(mp.Spec.Name)
-	vmss.SetCustomData(*mp.MachinePool.Spec.Template.Spec.Bootstrap.Data)
+	vmss.SetCustomData(mp.CustomData())
 	vmss.SetSSHPublicKey(mp.Spec.SSHPublicKey)
 	vmss.SetUserAssignedIdentity(&mp.Spec.ResourceGroup)
 	vmss.SetOSDiskSize(128)

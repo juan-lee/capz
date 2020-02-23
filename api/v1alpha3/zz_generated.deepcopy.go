@@ -272,8 +272,8 @@ func (in *AzureMachinePoolList) DeepCopyObject() runtime.Object {
 func (in *AzureMachinePoolSpec) DeepCopyInto(out *AzureMachinePoolSpec) {
 	*out = *in
 	out.ResourceGroup = in.ResourceGroup
-	if in.ProviderIDs != nil {
-		in, out := &in.ProviderIDs, &out.ProviderIDs
+	if in.ProviderIDList != nil {
+		in, out := &in.ProviderIDList, &out.ProviderIDList
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}

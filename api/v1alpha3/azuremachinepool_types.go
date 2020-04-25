@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	// MachinePoolFinalizer allows AzureMachinePoolReconciler to clean up Azure resources
+	// AzureMachinePoolFinalizer allows AzureMachinePoolReconciler to clean up Azure resources
 	// associated with AzureMachinePool before removing it from the apiserver.
 	AzureMachinePoolFinalizer = "azuremachinepool.infrastructure.cluster.x-k8s.io"
 )
@@ -95,6 +95,6 @@ type AzureMachinePoolList struct {
 	Items           []AzureMachinePool `json:"items"`
 }
 
-func init() {
+func init() { // nolint: gochecknoinits
 	SchemeBuilder.Register(&AzureMachinePool{}, &AzureMachinePoolList{})
 }

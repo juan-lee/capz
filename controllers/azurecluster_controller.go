@@ -31,8 +31,20 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/juan-lee/capz/api/v1alpha3"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+
+	"github.com/juan-lee/capz/api/v1alpha3"
+)
+
+const (
+	frontendConfigName   = "frontend"
+	apiServerPort        = 6443
+	sshPort              = 22
+	sshPortRangeStart    = 50000
+	sshPortRangeEnd      = 50009
+	idleTimeoutMinutes   = 4
+	probeIntervalSeconds = 5
+	probeCount           = 2
 )
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=azureclusters,verbs=get;list;watch;create;update;patch;delete
@@ -46,23 +58,25 @@ type AzureClusterReconciler struct {
 }
 
 func authorizeFromFile(c *autorest.Client) error {
-	auth, err := auth.NewAuthorizerFromFileWithResource(azure.PublicCloud.ResourceManagerEndpoint)
+	a, err := auth.NewAuthorizerFromFileWithResource(azure.PublicCloud.ResourceManagerEndpoint)
 	if err != nil {
 		return err
 	}
-	c.Authorizer = auth
+	c.Authorizer = a
 	if err := c.AddToUserAgent("capz"); err != nil {
 		return err
 	}
 	return nil
 }
 
+// SetupWithManager performs manager setup.
 func (r *AzureClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha3.AzureCluster{}).
 		Complete(r)
 }
 
+// Reconcile reconciles an AzureCluster instance.
 func (r *AzureClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("azurecluster", req.NamespacedName)
 	ctx := context.Background()
@@ -72,11 +86,11 @@ func (r *AzureClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		log.Info("Error fetching AzureCluster", "err", err)
 		return ctrl.Result{}, nil
 	}
-	if err := r.reconcileEnvironment(ctx, instance); err != nil {
+	if err = r.reconcileEnvironment(ctx, instance); err != nil {
 		log.Info("Error reconciling environment", "err", err)
 		return ctrl.Result{}, nil
 	}
-	if err := r.reconcileNetwork(ctx, instance); err != nil {
+	if err = r.reconcileNetwork(ctx, instance); err != nil {
 		log.Info("Error reconciling network", "err", err)
 		return ctrl.Result{}, nil
 	}
@@ -192,7 +206,7 @@ func (r *AzureClusterReconciler) reconcileRouteTable(ctx context.Context, instan
 	if err != nil {
 		return fmt.Errorf("failed to update route table %w\n%+v", err, rt)
 	}
-	if err := future.WaitForCompletionRef(ctx, c.Client); err != nil {
+	if err = future.WaitForCompletionRef(ctx, c.Client); err != nil {
 		return fmt.Errorf("failed to wait for route table update [%w]", err)
 	}
 	rt, err = future.Result(c)
@@ -200,7 +214,6 @@ func (r *AzureClusterReconciler) reconcileRouteTable(ctx context.Context, instan
 		return fmt.Errorf("failed to get route table update result [%w]", err)
 	}
 	return nil
-
 }
 
 func (r *AzureClusterReconciler) reconcileSecurityGroups(ctx context.Context, instance *v1alpha3.AzureCluster) error {
@@ -227,7 +240,7 @@ func (r *AzureClusterReconciler) reconcileSecurityGroups(ctx context.Context, in
 		if err != nil {
 			return fmt.Errorf("failed to update security group %w\n%+v", err, sg)
 		}
-		if err := future.WaitForCompletionRef(ctx, c.Client); err != nil {
+		if err = future.WaitForCompletionRef(ctx, c.Client); err != nil {
 			return fmt.Errorf("failed to wait for update security group %w", err)
 		}
 		sg, err = future.Result(c)
@@ -297,17 +310,13 @@ func (r *AzureClusterReconciler) reconcileVirtualNetwork(ctx context.Context, in
 
 	vnet.Name = &instance.Spec.Network.VirtualNetwork.Name
 	vnet.Location = &instance.Spec.ResourceGroup.Region
-	changed, err := applyVNETChanges(instance.Spec.Network.VirtualNetwork, &vnet)
-	if err != nil {
-		return fmt.Errorf("failed to apply changes to virtual network [%w]", err)
-	}
-
+	changed := applyVNETChanges(instance.Spec.Network.VirtualNetwork, &vnet)
 	if changed {
 		future, err := vnets.CreateOrUpdate(ctx, instance.Spec.ResourceGroup.Name, *vnet.Name, vnet)
 		if err != nil {
 			return fmt.Errorf("failed to update virtual network [%w]\n%+v", err, vnet)
 		}
-		if err := future.WaitForCompletionRef(ctx, vnets.Client); err != nil {
+		if err = future.WaitForCompletionRef(ctx, vnets.Client); err != nil {
 			return fmt.Errorf("failed to wait for update virtual network [%w]", err)
 		}
 		if vnet, err = future.Result(vnets); err != nil {
@@ -317,30 +326,33 @@ func (r *AzureClusterReconciler) reconcileVirtualNetwork(ctx context.Context, in
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcileSubnets(ctx context.Context, instance *v1alpha3.AzureCluster) error {
-	for n := range instance.Spec.Network.Subnets {
-		rt, err := getRouteTable(ctx, instance.Spec.ResourceGroup.SubscriptionID, instance.Spec.ResourceGroup.Name, instance.Spec.Network.Subnets[n].RouteTable)
+func (r *AzureClusterReconciler) reconcileSubnets(ctx context.Context, ac *v1alpha3.AzureCluster) error {
+	for n := range ac.Spec.Network.Subnets {
+		rt, err := getRouteTable(ctx, &ac.Spec.ResourceGroup, ac.Spec.Network.Subnets[n].RouteTable)
 		if err != nil {
 			return fmt.Errorf("failed to get route table [%w]", err)
 		}
-		sg, err := getSecurityGroup(ctx, instance.Spec.ResourceGroup.SubscriptionID, instance.Spec.ResourceGroup.Name, instance.Spec.Network.Subnets[n].SecurityGroup)
+		sg, err := getSecurityGroup(ctx, &ac.Spec.ResourceGroup, ac.Spec.Network.Subnets[n].SecurityGroup)
 		if err != nil {
 			return fmt.Errorf("failed to get security group [%w]", err)
 		}
 
-		c := network.NewSubnetsClient(instance.Spec.ResourceGroup.SubscriptionID)
+		c := network.NewSubnetsClient(ac.Spec.ResourceGroup.SubscriptionID)
 		err = authorizeFromFile(&c.Client)
 		if err != nil {
 			return fmt.Errorf("failed to auth [%w]", err)
 		}
 
 		subnet := network.Subnet{SubnetPropertiesFormat: &network.SubnetPropertiesFormat{}}
-		for list, err := c.List(ctx, instance.Spec.ResourceGroup.Name, instance.Spec.Network.Subnets[n].VirtualNetwork); list.NotDone(); err = list.NextWithContext(ctx) {
+		for list, err := c.List(
+			ctx, ac.Spec.ResourceGroup.Name,
+			ac.Spec.Network.Subnets[n].VirtualNetwork,
+		); list.NotDone(); err = list.NextWithContext(ctx) {
 			if err != nil {
 				return fmt.Errorf("failed to list subnets [%w]", err)
 			}
 			for _, v := range list.Values() {
-				if instance.Spec.Network.Subnets[n].Name == *v.Name {
+				if ac.Spec.Network.Subnets[n].Name == *v.Name {
 					subnet = v
 				}
 			}
@@ -348,17 +360,19 @@ func (r *AzureClusterReconciler) reconcileSubnets(ctx context.Context, instance 
 
 		subnet.RouteTable = rt
 		subnet.NetworkSecurityGroup = sg
-		changed, err := applySubnetChanges(instance.Spec.Network.Subnets[n], &subnet)
-		if err != nil {
-			return fmt.Errorf("failed to apply changes to subnet [%w]", err)
-		}
-
+		changed := applySubnetChanges(&ac.Spec.Network.Subnets[n], &subnet)
 		if changed {
-			future, err := c.CreateOrUpdate(ctx, instance.Spec.ResourceGroup.Name, instance.Spec.Network.Subnets[n].VirtualNetwork, instance.Spec.Network.Subnets[n].Name, subnet)
+			future, err := c.CreateOrUpdate(
+				ctx,
+				ac.Spec.ResourceGroup.Name,
+				ac.Spec.Network.Subnets[n].VirtualNetwork,
+				ac.Spec.Network.Subnets[n].Name,
+				subnet,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to update subnet [%w]", err)
 			}
-			if err := future.WaitForCompletionRef(ctx, c.Client); err != nil {
+			if err = future.WaitForCompletionRef(ctx, c.Client); err != nil {
 				return fmt.Errorf("failed to wait for update subnet [%w]", err)
 			}
 			subnet, err = future.Result(c)
@@ -416,7 +430,7 @@ func (r *AzureClusterReconciler) reconcilePublicIP(ctx context.Context, instance
 	if err != nil {
 		return fmt.Errorf("failed to update public ip [%w]\n%+v", err, ip)
 	}
-	if err := future.WaitForCompletionRef(ctx, c.Client); err != nil {
+	if err = future.WaitForCompletionRef(ctx, c.Client); err != nil {
 		return fmt.Errorf("failed to wait for update public ip [%w]", err)
 	}
 	ip, err = future.Result(c)
@@ -433,22 +447,23 @@ func (r *AzureClusterReconciler) reconcilePublicIP(ctx context.Context, instance
 	return nil
 }
 
-func (r *AzureClusterReconciler) reconcileLoadBalancer(ctx context.Context, instance *v1alpha3.AzureCluster) error {
-	c := network.NewLoadBalancersClient(instance.Spec.ResourceGroup.SubscriptionID)
+// nolint: gocyclo
+func (r *AzureClusterReconciler) reconcileLoadBalancer(ctx context.Context, ac *v1alpha3.AzureCluster) error {
+	c := network.NewLoadBalancersClient(ac.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
 	if err != nil {
 		return fmt.Errorf("failed to auth [%w]", err)
 	}
-	ip, err := getPublicIP(ctx, instance.Spec.ResourceGroup.SubscriptionID, instance.Spec.ResourceGroup.Name, instance.Spec.Network.LoadBalancer.Name)
+	ip, err := getPublicIP(ctx, ac.Spec.ResourceGroup.SubscriptionID, ac.Spec.ResourceGroup.Name, ac.Spec.Network.LoadBalancer.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get public ip [%w]", err)
 	}
-	lb, err := c.Get(ctx, instance.Spec.ResourceGroup.Name, instance.Spec.Network.LoadBalancer.Name, "")
+	lb, err := c.Get(ctx, ac.Spec.ResourceGroup.Name, ac.Spec.Network.LoadBalancer.Name, "")
 	if err != nil && !notFound(err) {
 		return fmt.Errorf("failed to get public load balancer [%w]", err)
 	}
 
-	lb.Location = &instance.Spec.ResourceGroup.Region
+	lb.Location = &ac.Spec.ResourceGroup.Region
 	lb.Sku = &network.LoadBalancerSku{Name: network.LoadBalancerSkuNameStandard}
 
 	if lb.LoadBalancerPropertiesFormat == nil {
@@ -461,7 +476,7 @@ func (r *AzureClusterReconciler) reconcileLoadBalancer(ctx context.Context, inst
 		}
 	}
 
-	feConfigName := "frontend"
+	feConfigName := frontendConfigName
 	found := false
 	for _, config := range *lb.FrontendIPConfigurations {
 		if *config.Name == feConfigName {
@@ -496,11 +511,11 @@ func (r *AzureClusterReconciler) reconcileLoadBalancer(ctx context.Context, inst
 	}
 
 	// TODO(jpang): hardcoded port
-	apiServerProbeName := "https_6443"
+	apiServerProbeName := fmt.Sprintf("https_%d", 6443)
 	found = false
 	for _, config := range *lb.Probes {
 		if *config.Name == apiServerProbeName {
-			config.ProbePropertiesFormat = makeProbeProperties(6443)
+			config.ProbePropertiesFormat = makeProbeProperties(apiServerPort)
 			found = true
 		}
 	}
@@ -510,15 +525,15 @@ func (r *AzureClusterReconciler) reconcileLoadBalancer(ctx context.Context, inst
 			*lb.Probes,
 			network.Probe{
 				Name:                  &apiServerProbeName,
-				ProbePropertiesFormat: makeProbeProperties(6443),
+				ProbePropertiesFormat: makeProbeProperties(apiServerPort),
 			})
 	}
 
-	future, err := c.CreateOrUpdate(ctx, instance.Spec.ResourceGroup.Name, instance.Spec.Network.LoadBalancer.Name, lb)
+	future, err := c.CreateOrUpdate(ctx, ac.Spec.ResourceGroup.Name, ac.Spec.Network.LoadBalancer.Name, lb)
 	if err != nil {
 		return fmt.Errorf("failed to update public load balancer [%w]\n%+v", err, lb)
 	}
-	if err := future.WaitForCompletionRef(ctx, c.Client); err != nil {
+	if err = future.WaitForCompletionRef(ctx, c.Client); err != nil {
 		return fmt.Errorf("failed to wait for update public load balancer [%w]", err)
 	}
 	lb, err = future.Result(c)
@@ -539,16 +554,16 @@ func (r *AzureClusterReconciler) reconcileLoadBalancerRules(ctx context.Context,
 		return fmt.Errorf("failed to get public load balancer [%w]", err)
 	}
 
-	apiServerRuleName := "https_6443"
+	apiServerRuleName := fmt.Sprintf("https_%d", 6443)
 	found := false
 	for _, config := range *lb.LoadBalancingRules {
 		if *config.Name == apiServerRuleName {
 			config.LoadBalancingRulePropertiesFormat = makeRule(
-				6443,
-				6443,
-				findFrontendIPConfigurationID(&lb, "frontend"),
+				apiServerPort,
+				apiServerPort,
+				findFrontendIPConfigurationID(&lb),
 				findBackendAddressPoolID(&lb, "backend"),
-				findProbeID(&lb, "https_6443"),
+				findProbeID(&lb, apiServerRuleName),
 			)
 			found = true
 		}
@@ -560,11 +575,11 @@ func (r *AzureClusterReconciler) reconcileLoadBalancerRules(ctx context.Context,
 			network.LoadBalancingRule{
 				Name: &apiServerRuleName,
 				LoadBalancingRulePropertiesFormat: makeRule(
-					6443,
-					6443,
-					findFrontendIPConfigurationID(&lb, "frontend"),
+					apiServerPort,
+					apiServerPort,
+					findFrontendIPConfigurationID(&lb),
 					findBackendAddressPoolID(&lb, "backend"),
-					findProbeID(&lb, "https_6443"),
+					findProbeID(&lb, apiServerRuleName),
 				),
 			})
 	}
@@ -574,10 +589,10 @@ func (r *AzureClusterReconciler) reconcileLoadBalancerRules(ctx context.Context,
 	for _, config := range *lb.InboundNatPools {
 		if *config.Name == natPoolName {
 			config.InboundNatPoolPropertiesFormat = makeNATPool(
-				50000,
-				50009,
-				22,
-				findFrontendIPConfigurationID(&lb, "frontend"),
+				sshPortRangeStart,
+				sshPortRangeEnd,
+				sshPort,
+				findFrontendIPConfigurationID(&lb),
 			)
 			found = true
 		}
@@ -589,10 +604,10 @@ func (r *AzureClusterReconciler) reconcileLoadBalancerRules(ctx context.Context,
 			network.InboundNatPool{
 				Name: &natPoolName,
 				InboundNatPoolPropertiesFormat: makeNATPool(
-					50000,
-					50009,
-					22,
-					findFrontendIPConfigurationID(&lb, "frontend"),
+					sshPortRangeStart,
+					sshPortRangeEnd,
+					sshPort,
+					findFrontendIPConfigurationID(&lb),
 				),
 			})
 	}
@@ -601,7 +616,7 @@ func (r *AzureClusterReconciler) reconcileLoadBalancerRules(ctx context.Context,
 	if err != nil {
 		return fmt.Errorf("failed to update public load balancer [%w]\n%+v", err, lb)
 	}
-	if err := future.WaitForCompletionRef(ctx, c.Client); err != nil {
+	if err = future.WaitForCompletionRef(ctx, c.Client); err != nil {
 		return fmt.Errorf("failed to wait for update public load balancer [%w]", err)
 	}
 	lb, err = future.Result(c)
@@ -616,7 +631,7 @@ func makeRule(frontPort, backPort int, fe, be, pr string) *network.LoadBalancing
 		Protocol:                network.TransportProtocolTCP,
 		FrontendPort:            to.Int32Ptr(int32(frontPort)),
 		BackendPort:             to.Int32Ptr(int32(backPort)),
-		IdleTimeoutInMinutes:    to.Int32Ptr(4),
+		IdleTimeoutInMinutes:    to.Int32Ptr(idleTimeoutMinutes),
 		EnableFloatingIP:        to.BoolPtr(false),
 		EnableTCPReset:          to.BoolPtr(true),
 		LoadDistribution:        network.LoadDistributionDefault,
@@ -633,15 +648,15 @@ func makeNATPool(frontPortStart, frontPortEnd, backPort int, fe string) *network
 		FrontendPortRangeStart:  to.Int32Ptr(int32(frontPortStart)),
 		FrontendPortRangeEnd:    to.Int32Ptr(int32(frontPortEnd)),
 		BackendPort:             to.Int32Ptr(int32(backPort)),
-		IdleTimeoutInMinutes:    to.Int32Ptr(4),
+		IdleTimeoutInMinutes:    to.Int32Ptr(idleTimeoutMinutes),
 		EnableFloatingIP:        to.BoolPtr(false),
 		EnableTCPReset:          to.BoolPtr(true),
 	}
 }
 
-func findFrontendIPConfigurationID(lb *network.LoadBalancer, name string) string {
+func findFrontendIPConfigurationID(lb *network.LoadBalancer) string {
 	for _, config := range *lb.LoadBalancerPropertiesFormat.FrontendIPConfigurations {
-		if *config.Name == name {
+		if *config.Name == frontendConfigName {
 			return *config.ID
 		}
 	}
@@ -670,8 +685,8 @@ func makeProbeProperties(port int) *network.ProbePropertiesFormat {
 	return &network.ProbePropertiesFormat{
 		Protocol:          network.ProbeProtocolHTTPS,
 		Port:              to.Int32Ptr(int32(port)),
-		IntervalInSeconds: to.Int32Ptr(5),
-		NumberOfProbes:    to.Int32Ptr(2),
+		IntervalInSeconds: to.Int32Ptr(probeIntervalSeconds),
+		NumberOfProbes:    to.Int32Ptr(probeCount),
 		RequestPath:       to.StringPtr("/healthz"),
 	}
 }
@@ -682,13 +697,13 @@ func makePublicFrontendIPConfig(publicIPAddressID string) *network.FrontendIPCon
 	}
 }
 
-func applySubnetChanges(spec v1alpha3.Subnet, subnet *network.Subnet) (bool, error) {
+func applySubnetChanges(spec *v1alpha3.Subnet, subnet *network.Subnet) bool {
 	changed := false
 	if subnet.AddressPrefix == nil || spec.CIDR != *subnet.AddressPrefix {
 		changed = true
 		subnet.AddressPrefix = &spec.CIDR
 	}
-	return changed, nil
+	return changed
 }
 
 func getPublicIP(ctx context.Context, subID, rg, name string) (*network.PublicIPAddress, error) {
@@ -704,33 +719,33 @@ func getPublicIP(ctx context.Context, subID, rg, name string) (*network.PublicIP
 	return &ip, nil
 }
 
-func getSecurityGroup(ctx context.Context, subID, rg, name string) (*network.SecurityGroup, error) {
-	c := network.NewSecurityGroupsClient(subID)
+func getSecurityGroup(ctx context.Context, rg *v1alpha3.ResourceGroup, name string) (*network.SecurityGroup, error) {
+	c := network.NewSecurityGroupsClient(rg.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
 	if err != nil {
 		return &network.SecurityGroup{}, err
 	}
-	sg, err := c.Get(ctx, rg, name, "")
+	sg, err := c.Get(ctx, rg.Name, name, "")
 	if err != nil && !notFound(err) {
 		return &network.SecurityGroup{}, err
 	}
 	return &sg, nil
 }
 
-func getRouteTable(ctx context.Context, subID, rg, name string) (*network.RouteTable, error) {
-	c := network.NewRouteTablesClient(subID)
+func getRouteTable(ctx context.Context, rg *v1alpha3.ResourceGroup, name string) (*network.RouteTable, error) {
+	c := network.NewRouteTablesClient(rg.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
 	if err != nil {
 		return &network.RouteTable{}, err
 	}
-	rt, err := c.Get(ctx, rg, name, "")
+	rt, err := c.Get(ctx, rg.Name, name, "")
 	if err != nil && !notFound(err) {
 		return &network.RouteTable{}, err
 	}
 	return &rt, nil
 }
 
-func applyVNETChanges(spec v1alpha3.VirtualNetwork, vnet *network.VirtualNetwork) (bool, error) {
+func applyVNETChanges(spec v1alpha3.VirtualNetwork, vnet *network.VirtualNetwork) bool {
 	changed := false
 	if vnet.VirtualNetworkPropertiesFormat == nil {
 		vnet.VirtualNetworkPropertiesFormat = &network.VirtualNetworkPropertiesFormat{
@@ -753,7 +768,7 @@ func applyVNETChanges(spec v1alpha3.VirtualNetwork, vnet *network.VirtualNetwork
 			changed = true
 		}
 	}
-	return changed, nil
+	return changed
 }
 
 func clearState(group *resources.Group) {

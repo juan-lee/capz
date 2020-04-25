@@ -83,6 +83,6 @@ type AzureClusterList struct {
 	Items           []AzureCluster `json:"items"`
 }
 
-func init() {
+func init() { // nolint: gochecknoinits
 	SchemeBuilder.Register(&AzureCluster{}, &AzureClusterList{})
 }

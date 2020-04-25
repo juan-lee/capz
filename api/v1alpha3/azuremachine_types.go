@@ -95,6 +95,6 @@ type AzureMachineList struct {
 	Items           []AzureMachine `json:"items"`
 }
 
-func init() {
+func init() { // nolint: gochecknoinits
 	SchemeBuilder.Register(&AzureMachine{}, &AzureMachineList{})
 }

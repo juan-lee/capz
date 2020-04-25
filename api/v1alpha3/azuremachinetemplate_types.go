@@ -20,7 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// AzureMachineTemplateSpec defines the desired state of AzureMachineTemplate
+// AzureMachineTemplateResource defines the desired state of AzureMachineTemplate
 type AzureMachineTemplateResource struct {
 	Spec AzureMachineSpec `json:"spec"`
 }
@@ -56,6 +56,6 @@ type AzureMachineTemplateList struct {
 	Items           []AzureMachineTemplate `json:"items"`
 }
 
-func init() {
+func init() { // nolint: gochecknoinits
 	SchemeBuilder.Register(&AzureMachineTemplate{}, &AzureMachineTemplateList{})
 }

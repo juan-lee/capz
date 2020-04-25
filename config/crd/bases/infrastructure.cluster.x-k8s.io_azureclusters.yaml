@@ -1,10 +1,10 @@
 
 ---
-apiVersion: apiextensions.k8s.io/v1
+apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.5
+    controller-gen.kubebuilder.io/version: v0.2.8
   creationTimestamp: null
   name: azureclusters.infrastructure.cluster.x-k8s.io
 spec:
@@ -15,165 +15,166 @@ spec:
     plural: azureclusters
     singular: azurecluster
   scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      description: AzureCluster is the Schema for the azureclusters API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: AzureClusterSpec defines the desired state of AzureCluster
+          properties:
+            controlPlaneEndpoint:
+              description: ControlPlaneEndpoint
+              properties:
+                host:
+                  description: The hostname on which the API server is serving.
+                  type: string
+                port:
+                  description: The port on which the API server is serving.
+                  format: int32
+                  type: integer
+              required:
+              - host
+              - port
+              type: object
+            network:
+              description: Network
+              properties:
+                loadBalancer:
+                  description: LoadBalancer
+                  properties:
+                    name:
+                      description: Name
+                      type: string
+                  type: object
+                routeTable:
+                  description: RouteTable
+                  properties:
+                    name:
+                      description: Name
+                      type: string
+                  type: object
+                securityGroups:
+                  description: Subnets
+                  items:
+                    description: SecurityGroup defines an azure network security group.
+                    properties:
+                      name:
+                        description: Name
+                        type: string
+                    type: object
+                  type: array
+                subnets:
+                  description: Subnets
+                  items:
+                    description: Subnet defines an azure subnet resource.
+                    properties:
+                      cidr:
+                        description: CIDR
+                        type: string
+                      name:
+                        description: Name
+                        type: string
+                      routeTable:
+                        description: RouteTable
+                        type: string
+                      securityGroup:
+                        description: SecurityGroup
+                        type: string
+                      vnet:
+                        description: VirtualNetwork
+                        type: string
+                    type: object
+                  type: array
+                vnet:
+                  description: VirtualNetwork
+                  properties:
+                    cidrs:
+                      description: CIDRs
+                      items:
+                        type: string
+                      type: array
+                    name:
+                      description: Name
+                      type: string
+                  required:
+                  - cidrs
+                  type: object
+              required:
+              - securityGroups
+              - subnets
+              type: object
+            resourceGroup:
+              description: ResourceGroup
+              properties:
+                name:
+                  description: Name
+                  type: string
+                region:
+                  description: Region
+                  type: string
+                subscriptionID:
+                  description: SubscriptionID
+                  type: string
+              type: object
+          type: object
+        status:
+          description: AzureClusterStatus defines the observed state of AzureCluster
+          properties:
+            errorMessage:
+              description: ErrorMessage indicates that there is a problem reconciling
+                the state, and will be set to a descriptive error message.
+              type: string
+            errorReason:
+              description: ErrorReason indicates that there is a problem reconciling
+                the state, and will be set to a token value suitable for programmatic
+                interpretation.
+              type: string
+            failureDomains:
+              additionalProperties:
+                description: FailureDomainSpec is the Schema for Cluster API failure
+                  domains. It allows controllers to understand how many failure domains
+                  a cluster can optionally span across.
+                properties:
+                  attributes:
+                    additionalProperties:
+                      type: string
+                    description: Attributes is a free form map of attributes an infrastructure
+                      provider might use or require.
+                    type: object
+                  controlPlane:
+                    description: ControlPlane determines if this failure domain is
+                      suitable for use by control plane machines.
+                    type: boolean
+                type: object
+              description: FailureDomains
+              type: object
+            ready:
+              description: Ready indicates that the cluster infrastructure was successfully
+                provisioned.
+              type: boolean
+          required:
+          - ready
+          type: object
+      type: object
+  version: v1alpha3
   versions:
   - name: v1alpha3
-    schema:
-      openAPIV3Schema:
-        description: AzureCluster is the Schema for the azureclusters API
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: AzureClusterSpec defines the desired state of AzureCluster
-            properties:
-              controlPlaneEndpoint:
-                description: ControlPlaneEndpoint
-                properties:
-                  host:
-                    description: The hostname on which the API server is serving.
-                    type: string
-                  port:
-                    description: The port on which the API server is serving.
-                    format: int32
-                    type: integer
-                required:
-                - host
-                - port
-                type: object
-              network:
-                description: Network
-                properties:
-                  loadBalancer:
-                    description: LoadBalancer
-                    properties:
-                      name:
-                        description: Name
-                        type: string
-                    type: object
-                  routeTable:
-                    description: RouteTable
-                    properties:
-                      name:
-                        description: Name
-                        type: string
-                    type: object
-                  securityGroups:
-                    description: Subnets
-                    items:
-                      description: SecurityGroup
-                      properties:
-                        name:
-                          description: Name
-                          type: string
-                      type: object
-                    type: array
-                  subnets:
-                    description: Subnets
-                    items:
-                      description: Subnet
-                      properties:
-                        cidr:
-                          description: CIDR
-                          type: string
-                        name:
-                          description: Name
-                          type: string
-                        routeTable:
-                          description: RouteTable
-                          type: string
-                        securityGroup:
-                          description: SecurityGroup
-                          type: string
-                        vnet:
-                          description: VirtualNetwork
-                          type: string
-                      type: object
-                    type: array
-                  vnet:
-                    description: VirtualNetwork
-                    properties:
-                      cidrs:
-                        description: CIDRs
-                        items:
-                          type: string
-                        type: array
-                      name:
-                        description: Name
-                        type: string
-                    required:
-                    - cidrs
-                    type: object
-                required:
-                - securityGroups
-                - subnets
-                type: object
-              resourceGroup:
-                description: ResourceGroup
-                properties:
-                  name:
-                    description: Name
-                    type: string
-                  region:
-                    description: Region
-                    type: string
-                  subscriptionID:
-                    description: SubscriptionID
-                    type: string
-                type: object
-            type: object
-          status:
-            description: AzureClusterStatus defines the observed state of AzureCluster
-            properties:
-              errorMessage:
-                description: ErrorMessage indicates that there is a problem reconciling
-                  the state, and will be set to a descriptive error message.
-                type: string
-              errorReason:
-                description: ErrorReason indicates that there is a problem reconciling
-                  the state, and will be set to a token value suitable for programmatic
-                  interpretation.
-                type: string
-              failureDomains:
-                additionalProperties:
-                  description: FailureDomainSpec is the Schema for Cluster API failure
-                    domains. It allows controllers to understand how many failure
-                    domains a cluster can optionally span across.
-                  properties:
-                    attributes:
-                      additionalProperties:
-                        type: string
-                      description: Attributes is a free form map of attributes an
-                        infrastructure provider might use or require.
-                      type: object
-                    controlPlane:
-                      description: ControlPlane determines if this failure domain
-                        is suitable for use by control plane machines.
-                      type: boolean
-                  type: object
-                description: FailureDomains
-                type: object
-              ready:
-                description: Ready indicates that the cluster infrastructure was successfully
-                  provisioned.
-                type: boolean
-            required:
-            - ready
-            type: object
-        type: object
     served: true
     storage: true
-    subresources:
-      status: {}
 status:
   acceptedNames:
     kind: ""

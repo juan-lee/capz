@@ -25,7 +25,7 @@ type APIEndpoint struct {
 	Port int `json:"port,omitempty"`
 }
 
-// ResourceGroup
+// ResourceGroup defines an azure resource group.
 type ResourceGroup struct {
 	// Name
 	Name string `json:"name,omitempty"`
@@ -37,7 +37,7 @@ type ResourceGroup struct {
 	Region string `json:"region,omitempty"`
 }
 
-// Network
+// Network defines  azure network resources.
 type Network struct {
 	// VirtualNetwork
 	VirtualNetwork VirtualNetwork `json:"vnet,omitempty"`
@@ -55,7 +55,7 @@ type Network struct {
 	LoadBalancer LoadBalancer `json:"loadBalancer,omitempty"`
 }
 
-// VirtualNetwork
+// VirtualNetwork defines an azure virtual network resource.
 type VirtualNetwork struct {
 	// Name
 	Name string `json:"name,omitempty"`
@@ -64,7 +64,7 @@ type VirtualNetwork struct {
 	CIDRs []string `json:"cidrs"`
 }
 
-// Subnet
+// Subnet defines an azure subnet resource.
 type Subnet struct {
 	// Name
 	Name string `json:"name,omitempty"`
@@ -82,19 +82,19 @@ type Subnet struct {
 	CIDR string `json:"cidr,omitempty"`
 }
 
-// RouteTable
+// RouteTable defines an azure route table resource.
 type RouteTable struct {
 	// Name
 	Name string `json:"name,omitempty"`
 }
 
-// SecurityGroup
+// SecurityGroup defines an azure network security group.
 type SecurityGroup struct {
 	// Name
 	Name string `json:"name,omitempty"`
 }
 
-// LoadBalancer
+// LoadBalancer defines an azure load balancer resource.
 type LoadBalancer struct {
 	// Name
 	Name string `json:"name,omitempty"`

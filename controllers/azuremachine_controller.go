@@ -40,6 +40,10 @@ import (
 	"github.com/juan-lee/capz/api/v1alpha3"
 )
 
+const (
+	defaultOSDiskSize = 128
+)
+
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=azuremachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=azuremachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
@@ -69,6 +73,7 @@ func (m *machineContext) Close(ctx context.Context) error {
 	return m.patchHelper.Patch(ctx, m.AzureMachine)
 }
 
+// nolint: dupl
 func (m *machineContext) SubnetID(cidr string) string {
 	c := network.NewSubnetsClient(m.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
@@ -76,7 +81,11 @@ func (m *machineContext) SubnetID(cidr string) string {
 		return ""
 	}
 	ctx := context.Background()
-	for list, err := c.List(ctx, m.Spec.ResourceGroup.Name, m.AzureCluster.Spec.Network.VirtualNetwork.Name); list.NotDone(); err = list.NextWithContext(ctx) {
+	for list, err := c.List(
+		ctx,
+		m.Spec.ResourceGroup.Name,
+		m.AzureCluster.Spec.Network.VirtualNetwork.Name,
+	); list.NotDone(); err = list.NextWithContext(ctx) {
 		if err != nil {
 			return ""
 		}
@@ -89,6 +98,7 @@ func (m *machineContext) SubnetID(cidr string) string {
 	return ""
 }
 
+// nolint: dupl
 func (m *machineContext) BackendPoolIDs(lbname string) []string {
 	c := network.NewLoadBalancersClient(m.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
@@ -106,6 +116,7 @@ func (m *machineContext) BackendPoolIDs(lbname string) []string {
 	return result
 }
 
+// nolint: dupl
 func (m *machineContext) InboundNatPoolIDs(lbname string) []string {
 	c := network.NewLoadBalancersClient(m.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
@@ -125,7 +136,14 @@ func (m *machineContext) InboundNatPoolIDs(lbname string) []string {
 
 func (m *machineContext) CustomData() string {
 	secret := &corev1.Secret{}
-	err := m.Client.Get(context.Background(), types.NamespacedName{Name: *m.Machine.Spec.Bootstrap.DataSecretName, Namespace: m.Namespace}, secret)
+	err := m.Client.Get(
+		context.Background(),
+		types.NamespacedName{
+			Name:      *m.Machine.Spec.Bootstrap.DataSecretName,
+			Namespace: m.Namespace,
+		},
+		secret,
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -136,6 +154,7 @@ func (m *machineContext) CustomData() string {
 	return customData
 }
 
+// SetupWithManager initializes the manager.
 func (r *AzureMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha3.AzureMachine{}).
@@ -152,6 +171,7 @@ func (r *AzureMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+// Reconcile reconciles a AzureMachine instance.
 func (r *AzureMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	_ = context.Background()
 	log := r.Log.WithValues("azuremachine", req.NamespacedName)
@@ -229,7 +249,7 @@ func (r *AzureMachineReconciler) getMachineContext(ctx context.Context, req ctrl
 		Namespace: instance.Namespace,
 		Name:      cluster.Spec.InfrastructureRef.Name,
 	}
-	if err := r.Client.Get(ctx, azureClusterName, azureCluster); err != nil {
+	if err = r.Client.Get(ctx, azureClusterName, azureCluster); err != nil {
 		log.Info("AzureCluster is not available yet")
 		return nil, err
 	}
@@ -266,7 +286,7 @@ func (r *AzureMachineReconciler) reconcileMachine(ctx context.Context, machine *
 	if err != nil {
 		return fmt.Errorf("failed to update vm scale set [%w]\n%+v", err, scaleset)
 	}
-	if err := future.WaitForCompletionRef(ctx, scalesets.Client); err != nil {
+	if err = future.WaitForCompletionRef(ctx, scalesets.Client); err != nil {
 		return fmt.Errorf("failed to wait for update vm scale set [%w]\n%+v", err, scaleset)
 	}
 	scaleset, err = future.Result(scalesets)
@@ -285,20 +305,29 @@ func (r *AzureMachineReconciler) reconcileMachineInstance(ctx context.Context, m
 		return fmt.Errorf("failed to auth [%w]", err)
 	}
 
-	for list, err := vms.List(ctx, machine.Spec.ResourceGroup.Name, machine.Spec.Name, "", "", ""); list.NotDone(); err = list.NextWithContext(ctx) {
+	for list, err := vms.List(
+		ctx,
+		machine.Spec.ResourceGroup.Name,
+		machine.Spec.Name,
+		"", "", "",
+	); list.NotDone(); err = list.NextWithContext(ctx) {
 		if err != nil {
 			return fmt.Errorf("failed to list vm scale sets [%w]", err)
 		}
 		for _, v := range list.Values() {
 			machine.Spec.ProviderID = to.StringPtr(fmt.Sprintf("azure://%s", *v.ID))
 			machine.Status.Ready = true
-			log.Info("Setting ProviderID and Ready", "machine.Spec.ProviderID", *machine.Spec.ProviderID, "machine.Status.Ready", machine.Status.Ready)
+			log.Info(
+				"Setting ProviderID and Ready",
+				"machine.Spec.ProviderID", *machine.Spec.ProviderID,
+				"machine.Status.Ready", machine.Status.Ready,
+			)
 		}
 	}
 	return nil
 }
 
-// AzureClusterToAzureMachine is a handler.ToRequestsFunc to be used to enqeue
+// AzureClusterToAzureMachines is a handler.ToRequestsFunc to be used to enqeue
 // requests for reconciliation of AzureMachines.
 func (r *AzureMachineReconciler) AzureClusterToAzureMachines(o handler.MapObject) []ctrl.Request {
 	result := []ctrl.Request{}
@@ -324,11 +353,11 @@ func (r *AzureMachineReconciler) AzureClusterToAzureMachines(o handler.MapObject
 		log.Error(err, "failed to list Machines")
 		return nil
 	}
-	for _, m := range machineList.Items {
-		if m.Spec.InfrastructureRef.Name == "" {
+	for n := range machineList.Items {
+		if machineList.Items[n].Spec.InfrastructureRef.Name == "" {
 			continue
 		}
-		name := client.ObjectKey{Namespace: m.Namespace, Name: m.Spec.InfrastructureRef.Name}
+		name := client.ObjectKey{Namespace: machineList.Items[n].Namespace, Name: machineList.Items[n].Spec.InfrastructureRef.Name}
 		result = append(result, ctrl.Request{NamespacedName: name})
 	}
 
@@ -346,7 +375,7 @@ func applyMachineSpec(machine *machineContext, in *compute.VirtualMachineScaleSe
 	vmss.SetCustomData(machine.CustomData())
 	vmss.SetSSHPublicKey(machine.Spec.SSHPublicKey)
 	vmss.SetUserAssignedIdentity(&machine.Spec.ResourceGroup)
-	vmss.SetOSDiskSize(128)
+	vmss.SetOSDiskSize(defaultOSDiskSize)
 	vmss.SetSubnet(machine.SubnetID(machine.Spec.Subnet))
 
 	if util.IsControlPlaneMachine(machine.Machine) {
@@ -481,7 +510,9 @@ func (vmss *virtualMachineScaleSet) SetOSDiskSize(sizeGB int) {
 }
 
 func (vmss *virtualMachineScaleSet) SetSubnet(subnetID string) {
-	(*(*vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations)[0].VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations)[0].VirtualMachineScaleSetIPConfigurationProperties.Subnet.ID = &subnetID
+	netConfigs := *vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+	ipConfigs := *netConfigs[0].VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations
+	ipConfigs[0].VirtualMachineScaleSetIPConfigurationProperties.Subnet.ID = &subnetID
 }
 
 func (vmss *virtualMachineScaleSet) SetBackendPools(poolIDs []string) {
@@ -489,7 +520,9 @@ func (vmss *virtualMachineScaleSet) SetBackendPools(poolIDs []string) {
 	for n := range poolIDs {
 		sr = append(sr, compute.SubResource{ID: &poolIDs[n]})
 	}
-	(*(*vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations)[0].VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations)[0].LoadBalancerBackendAddressPools = &sr
+	netConfigs := *vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+	ipConfigs := *netConfigs[0].VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations
+	ipConfigs[0].LoadBalancerBackendAddressPools = &sr
 }
 
 func (vmss *virtualMachineScaleSet) SetInboundNATPools(poolIDs []string) {
@@ -497,5 +530,7 @@ func (vmss *virtualMachineScaleSet) SetInboundNATPools(poolIDs []string) {
 	for n := range poolIDs {
 		sr = append(sr, compute.SubResource{ID: &poolIDs[n]})
 	}
-	(*(*vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations)[0].VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations)[0].LoadBalancerInboundNatPools = &sr
+	netConfigs := *vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+	ipConfigs := *netConfigs[0].VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations
+	ipConfigs[0].LoadBalancerInboundNatPools = &sr
 }

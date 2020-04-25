@@ -67,6 +67,7 @@ func (m *machinePoolContext) Close(ctx context.Context) error {
 	return m.patchHelper.Patch(ctx, m.AzureMachinePool)
 }
 
+// nolint: dupl
 func (m *machinePoolContext) SubnetID(cidr string) string {
 	c := network.NewSubnetsClient(m.Spec.ResourceGroup.SubscriptionID)
 	err := authorizeFromFile(&c.Client)
@@ -74,7 +75,11 @@ func (m *machinePoolContext) SubnetID(cidr string) string {
 		return ""
 	}
 	ctx := context.Background()
-	for list, err := c.List(ctx, m.Spec.ResourceGroup.Name, m.AzureCluster.Spec.Network.VirtualNetwork.Name); list.NotDone(); err = list.NextWithContext(ctx) {
+	for list, err := c.List(
+		ctx,
+		m.Spec.ResourceGroup.Name,
+		m.AzureCluster.Spec.Network.VirtualNetwork.Name,
+	); list.NotDone(); err = list.NextWithContext(ctx) {
 		if err != nil {
 			return ""
 		}
@@ -89,7 +94,13 @@ func (m *machinePoolContext) SubnetID(cidr string) string {
 
 func (m *machinePoolContext) CustomData() string {
 	secret := &corev1.Secret{}
-	err := m.Client.Get(context.Background(), types.NamespacedName{Name: *m.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName, Namespace: m.Namespace}, secret)
+	err := m.Client.Get(
+		context.Background(),
+		types.NamespacedName{Name: *m.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName,
+			Namespace: m.Namespace,
+		},
+		secret,
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -100,6 +111,7 @@ func (m *machinePoolContext) CustomData() string {
 	return customData
 }
 
+// SetupWithManager initializes AzureMachinePoolReconciler.
 func (r *AzureMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha3.AzureMachinePool{}).
@@ -116,7 +128,7 @@ func (r *AzureMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// MachineToInfrastructureMapFunc returns a handler.ToRequestsFunc that watches for
+// MachinePoolToInfrastructureMapFunc returns a handler.ToRequestsFunc that watches for
 // Machine events and returns reconciliation requests for an infrastructure provider object.
 func (r *AzureMachinePoolReconciler) MachinePoolToInfrastructureMapFunc(gvk schema.GroupVersionKind) handler.ToRequestsFunc {
 	return func(o handler.MapObject) []reconcile.Request {
@@ -168,17 +180,21 @@ func (r *AzureMachinePoolReconciler) AzureClusterToAzureMachinePool(o handler.Ma
 		log.Error(err, "failed to list Machines")
 		return nil
 	}
-	for _, m := range machinepoolList.Items {
-		if m.Spec.Template.Spec.InfrastructureRef.Name == "" {
+	for n := range machinepoolList.Items {
+		if machinepoolList.Items[n].Spec.Template.Spec.InfrastructureRef.Name == "" {
 			continue
 		}
-		name := client.ObjectKey{Namespace: m.Namespace, Name: m.Spec.Template.Spec.InfrastructureRef.Name}
+		name := client.ObjectKey{
+			Namespace: machinepoolList.Items[n].Namespace,
+			Name:      machinepoolList.Items[n].Spec.Template.Spec.InfrastructureRef.Name,
+		}
 		result = append(result, ctrl.Request{NamespacedName: name})
 	}
 
 	return result
 }
 
+// Reconcile reconciles an instance of AzureMachinePool.
 func (r *AzureMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	_ = context.Background()
 	log := r.Log.WithValues("azuremachinepool", req.NamespacedName)
@@ -212,8 +228,8 @@ func (r *AzureMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result,
 	}
 
 	defer func() {
-		if err := machine.Close(ctx); err != nil && reterr == nil {
-			reterr = err
+		if cerr := machine.Close(ctx); cerr != nil && reterr == nil {
+			reterr = cerr
 			log.Error(err, "Error closing machine context")
 		}
 	}()
@@ -252,12 +268,12 @@ func (r *AzureMachinePoolReconciler) reconcileDelete(ctx context.Context, machin
 	if err != nil && !notFound(err) {
 		return fmt.Errorf("failed to delete vm scale set [%w]", err)
 	}
-	if err := future.WaitForCompletionRef(ctx, scalesets.Client); err != nil {
+	if err = future.WaitForCompletionRef(ctx, scalesets.Client); err != nil {
 		return fmt.Errorf("failed to wait for delete vm scale set [%w]", err)
 	}
 	_, err = future.Result(scalesets)
 	if err != nil {
-		return fmt.Errorf("failed to get result for delete vm scale set [%w]\n", err)
+		return fmt.Errorf("failed to get result for delete vm scale set [%w]", err)
 	}
 
 	machinepool.ObjectMeta.Finalizers = util.Filter(machinepool.ObjectMeta.Finalizers, v1alpha3.AzureMachinePoolFinalizer)
@@ -265,7 +281,7 @@ func (r *AzureMachinePoolReconciler) reconcileDelete(ctx context.Context, machin
 }
 
 // GetOwnerMachinePool returns the Machine object owning the current resource.
-func GetOwnerMachinePool(ctx context.Context, c client.Client, obj metav1.ObjectMeta) (*capiv1.MachinePool, error) {
+func GetOwnerMachinePool(ctx context.Context, c client.Client, obj *metav1.ObjectMeta) (*capiv1.MachinePool, error) {
 	for _, ref := range obj.OwnerReferences {
 		if ref.Kind == "MachinePool" && ref.APIVersion == capiv1.GroupVersion.String() {
 			return GetMachinePoolByName(ctx, c, obj.Namespace, ref.Name)
@@ -274,7 +290,7 @@ func GetOwnerMachinePool(ctx context.Context, c client.Client, obj metav1.Object
 	return nil, nil
 }
 
-// GetMachineByName finds and return a Machine object using the specified params.
+// GetMachinePoolByName finds and return a Machine object using the specified params.
 func GetMachinePoolByName(ctx context.Context, c client.Client, namespace, name string) (*capiv1.MachinePool, error) {
 	m := &capiv1.MachinePool{}
 	key := client.ObjectKey{Name: name, Namespace: namespace}
@@ -292,7 +308,7 @@ func (r *AzureMachinePoolReconciler) getMachinePoolContext(ctx context.Context, 
 		return nil, err
 	}
 
-	mp, err := GetOwnerMachinePool(ctx, r.Client, instance.ObjectMeta)
+	mp, err := GetOwnerMachinePool(ctx, r.Client, &instance.ObjectMeta)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +327,7 @@ func (r *AzureMachinePoolReconciler) getMachinePoolContext(ctx context.Context, 
 		Namespace: instance.Namespace,
 		Name:      cluster.Spec.InfrastructureRef.Name,
 	}
-	if err := r.Client.Get(ctx, azureClusterName, azureCluster); err != nil {
+	if err = r.Client.Get(ctx, azureClusterName, azureCluster); err != nil {
 		log.Info("AzureCluster is not available yet")
 		return nil, err
 	}
@@ -335,8 +351,7 @@ func (r *AzureMachinePoolReconciler) reconcileMachinePool(ctx context.Context, m
 	log.Info("reconcileMachinePool")
 
 	scalesets := compute.NewVirtualMachineScaleSetsClient(machinepool.Spec.ResourceGroup.SubscriptionID)
-	err := authorizeFromFile(&scalesets.Client)
-	if err != nil {
+	if err := authorizeFromFile(&scalesets.Client); err != nil {
 		return fmt.Errorf("failed to auth [%w]", err)
 	}
 
@@ -347,15 +362,15 @@ func (r *AzureMachinePoolReconciler) reconcileMachinePool(ctx context.Context, m
 
 	if scaleset.Sku != nil && *scaleset.Sku.Capacity != int64(*machinepool.MachinePool.Spec.Replicas) {
 		machinepool.Status.Ready = false
-		patchHelper, err := patch.NewHelper(machinepool.AzureMachinePool, r.Client)
-		if err != nil {
-			return err
+		patchHelper, perr := patch.NewHelper(machinepool.AzureMachinePool, r.Client)
+		if perr != nil {
+			return perr
 		}
-		if err := patchHelper.Patch(ctx, machinepool.AzureMachinePool); err != nil {
-			return err
+		if perr = patchHelper.Patch(ctx, machinepool.AzureMachinePool); err != nil {
+			return perr
 		}
-		if err := r.Client.Status().Update(ctx, machinepool.AzureMachinePool); err != nil {
-			return err
+		if perr = r.Client.Status().Update(ctx, machinepool.AzureMachinePool); err != nil {
+			return perr
 		}
 		log.Info("Patched AzureMachinePool")
 	}
@@ -366,7 +381,7 @@ func (r *AzureMachinePoolReconciler) reconcileMachinePool(ctx context.Context, m
 	if err != nil {
 		return fmt.Errorf("failed to update vm scale set [%w]\n%+v", err, scaleset)
 	}
-	if err := future.WaitForCompletionRef(ctx, scalesets.Client); err != nil {
+	if err = future.WaitForCompletionRef(ctx, scalesets.Client); err != nil {
 		return fmt.Errorf("failed to wait for update vm scale set [%w]\n%+v", err, scaleset)
 	}
 	scaleset, err = future.Result(scalesets)
@@ -417,6 +432,6 @@ func applyMachinePoolSpec(mp *machinePoolContext, in *compute.VirtualMachineScal
 	vmss.SetCustomData(mp.CustomData())
 	vmss.SetSSHPublicKey(mp.Spec.SSHPublicKey)
 	vmss.SetUserAssignedIdentity(&mp.Spec.ResourceGroup)
-	vmss.SetOSDiskSize(128)
+	vmss.SetOSDiskSize(defaultOSDiskSize)
 	vmss.SetSubnet(mp.SubnetID(mp.Spec.Subnet))
 }
